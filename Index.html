@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Appliance Checks</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:         #0f1117;
+    --surface:    #1a1d27;
+    --surface2:   #22263a;
+    --border:     #2e3354;
+    --accent:     #e8a020;
+    --yes:        #22c55e;
+    --yes-dim:    #14532d;
+    --no:         #ef4444;
+    --no-dim:     #7f1d1d;
+    --text:       #e8eaf0;
+    --text-dim:   #8b90a8;
+    --radius:     12px;
+    --font:       'DM Sans', system-ui, sans-serif;
+  }
+
+  html {
+    font-size: 40px;
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 1rem;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+    -webkit-text-size-adjust: none;
+    text-size-adjust: none;
+  }
+
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  .header-back {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 1.8rem;
+    padding: 0 12px;
+    min-width: 2.8rem;
+    font-size: 1rem;
+    font-weight: 600;
+    font-family: var(--font);
+    text-decoration: none;
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: border-color 0.15s, color 0.15s;
+    -webkit-appearance: none;
+  }
+  .header-back:active { border-color: var(--accent); color: var(--accent); }
+
+  .header-titles {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+  }
+  .header-callsign {
+    font-family: 'DM Mono', monospace;
+    font-size: 1rem;
+    color: var(--accent);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .week-selector-wrap {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+  }
+  .week-selector-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .week-selector {
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 1rem;
+    padding: 8px 14px;
+    flex-shrink: 0;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+
+  .refresh-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-dim);
+    font-family: var(--font);
+    font-size: 0.7rem;
+    font-weight: 500;
+    padding: 5px 10px;
+    cursor: pointer;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .refresh-btn:active { color: var(--accent); border-color: var(--accent); }
+  .refresh-btn .refresh-icon {
+    font-size: 0.85rem;
+    line-height: 1;
+    display: inline-block;
+  }
+  .refresh-btn.spinning { color: var(--accent); border-color: var(--accent); }
+  .refresh-btn.spinning .refresh-icon { animation: spin 0.7s linear infinite; }
+
+  /* ── Screens ── */
+  .screen { display: none; flex: 1; overflow-y: auto; }
+  .screen.active { display: flex; flex-direction: column; }
+
+  /* ── Loading ── */
+  .screen-loading {
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    flex-direction: column;
+  }
+  .spinner {
+    width: 40px; height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { color: var(--text-dim); font-size: 0.75rem; }
+
+  /* ── Check type banner ── */
+  .check-type-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px 8px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .check-type-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+  }
+  .check-type-pill {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: 20px;
+    border: 1.5px solid;
+  }
+  .check-type-pill.weekly  { color: var(--accent); border-color: var(--accent); background: rgba(232,160,32,0.1); }
+  .check-type-pill.monthly { color: var(--yes);    border-color: var(--yes);    background: rgba(34,197,94,0.1); }
+  .check-type-desc { font-size: 0.65rem; color: var(--text-dim); }
+
+  /* ── Section list ── */
+  .screen-sections { padding: 16px; gap: 10px; }
+
+  .sections-refresh-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15,17,23,0.72);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .sections-refresh-overlay.active { display: flex; }
+  .sections-refresh-overlay .spinner { width: 36px; height: 36px; }
+  .sections-refresh-overlay .overlay-label {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+
+  .section-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 16px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .section-card:active { background: var(--surface2); border-color: var(--accent); }
+  .section-card-body { flex: 1; min-width: 0; }
+  .section-card-name { font-size: 1rem; font-weight: 700; line-height: 1.3; }
+  .section-card-meta { font-size: 0.85rem; color: var(--text-dim); margin-top: 3px; }
+  .section-card-progress {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+  }
+  .progress-label { font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--text-dim); }
+  .progress-bar-track { width: 48px; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.3s; }
+  .progress-bar-fill.complete { background: var(--yes); }
+  .section-chevron { color: var(--text-dim); flex-shrink: 0; display: flex; align-items: center; }
+
+  /* ── Chevron icons via CSS mask ── */
+  .chev {
+    display: inline-block;
+    width: 10px; height: 18px;
+    background-color: currentColor;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+    -webkit-mask-position: center; mask-position: center;
+    flex-shrink: 0;
+  }
+  .chev-left {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg width='10' height='18' viewBox='0 0 10 18' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M9 1L1 9L9 17' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg width='10' height='18' viewBox='0 0 10 18' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M9 1L1 9L9 17' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  }
+  .chev-right {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg width='10' height='18' viewBox='0 0 10 18' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L9 9L1 17' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg width='10' height='18' viewBox='0 0 10 18' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L9 9L1 17' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  }
+
+  /* ── Items screen ── */
+  .screen-items { padding: 0 0 32px; }
+
+  .section-bottom-nav { display: flex; gap: 10px; margin: 24px 16px 8px; align-items: stretch; }
+
+  .nav-btn {
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--font);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .nav-btn:active { border-color: var(--accent); color: var(--accent); }
+
+  .section-back-btn { flex: 1; padding: 1rem; font-size: 1rem; font-weight: 600; text-align: center; }
+
+  .items-section-nav {
+    color: var(--accent);
+    width: auto; height: auto;
+    padding: 0.7rem 14px;
+    gap: 4px; flex-direction: row; flex-shrink: 0;
+  }
+  .items-section-nav:disabled { color: var(--border); border-color: var(--surface2); cursor: default; }
+  .items-section-nav:not(:disabled):active { border-color: var(--accent); color: var(--text); }
+  .items-section-nav .nav-label { font-size: 1rem; font-weight: 600; }
+
+  .header-nav-btn {
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--accent);
+    width: 2.8rem; height: 2.8rem;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+    padding: 0;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .header-nav-btn:disabled { color: var(--border); border-color: var(--surface2); cursor: default; }
+  .header-nav-btn:not(:disabled):active { border-color: var(--accent); color: var(--text); }
+
+  .items-section-header {
+    padding: 12px 8px 10px;
+    position: sticky; top: 0;
+    background: var(--bg);
+    z-index: 10;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 4px;
+  }
+  .items-section-title-wrap { flex: 1; min-width: 0; text-align: center; position: relative; }
+  .items-section-name {
+    font-size: 0.95rem; font-weight: 700; line-height: 1.25;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .items-section-count { font-size: 0.65rem; color: var(--text-dim); margin-top: 3px; }
+  .silent-refresh-spinner {
+    display: inline-block; vertical-align: middle; margin-left: 8px;
+    width: 0.8rem; height: 0.8rem;
+    border: 2px solid rgba(232,160,32,0.25);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  /* ── Item row ── */
+  .item-row { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
+  .item-row:last-child { border-bottom: none; }
+  .item-meta { display: flex; align-items: flex-start; gap: 8px; }
+  .item-label { flex: 1; font-size: 0.95rem; font-weight: 500; line-height: 1.4; }
+  .item-qty {
+    font-family: 'DM Mono', monospace; font-size: 0.9rem; color: var(--accent);
+    background: var(--surface2); padding: 2px 7px; border-radius: 5px;
+    flex-shrink: 0; margin-top: 2px;
+  }
+
+  /* ── Y/N buttons ── */
+  .yn-row { display: flex; gap: 8px; align-items: center; }
+  .yn-buttons { display: flex; gap: 6px; flex: 1; }
+  .yn-btn {
+    flex: 1; height: 3rem; border-radius: 10px;
+    border: 2px solid var(--border);
+    background: var(--surface2); color: var(--text-dim);
+    font-family: 'DM Mono', monospace; font-size: 1rem; font-weight: 700;
+    cursor: pointer; transition: all 0.12s;
+    -webkit-tap-highlight-color: transparent; letter-spacing: 0.05em;
+  }
+  .yn-btn:active { transform: scale(0.94); }
+  .yn-btn.y-active { background: var(--yes-dim); border-color: var(--yes); color: var(--yes); }
+  .yn-btn.n-active { background: var(--no-dim);  border-color: var(--no);  color: var(--no); }
+  .yn-btn.saving   { opacity: 0.5; pointer-events: none; }
+
+  /* ── Dropdown ── */
+  .item-select {
+    width: 100%; background: var(--surface2); border: 1.5px solid var(--border);
+    border-radius: 8px; color: var(--text); font-family: var(--font);
+    font-size: 1rem; padding: 10px 12px;
+    appearance: none; -webkit-appearance: none; cursor: pointer;
+  }
+  .item-select:focus { outline: none; border-color: var(--accent); }
+
+  /* ── Text input ── */
+  .text-input-wrap { display: flex; flex-direction: column; gap: 6px; }
+  .item-input {
+    width: 100%; background: var(--surface2); border: 1.5px solid var(--border);
+    border-radius: 8px; color: var(--text);
+    font-family: 'DM Mono', monospace; font-size: 1rem; padding: 10px 12px;
+  }
+  .item-input:focus { outline: none; border-color: var(--accent); }
+  .copy-prev-btn {
+    width: 100%; background: var(--surface2); border: 1.5px solid var(--border);
+    border-radius: 8px; color: var(--text); font-family: var(--font);
+    font-size: 0.95rem; padding: 10px 12px; cursor: pointer;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .copy-prev-btn:active { border-color: var(--accent); }
+  .copy-prev-label { color: var(--text-dim); font-size: 0.75rem; flex-shrink: 0; }
+  .copy-prev-val {
+    font-family: 'DM Mono', monospace; font-size: 0.95rem; color: var(--accent);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed; bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); font-size: 0.75rem; padding: 10px 18px;
+    border-radius: 24px; transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1);
+    z-index: 100; white-space: nowrap; pointer-events: none;
+  }
+  #toast.show   { transform: translateX(-50%) translateY(0); }
+  #toast.error  { border-color: var(--no);  color: var(--no); }
+
+  /* ── Error screen ── */
+  .screen-error {
+    align-items: center; justify-content: center;
+    padding: 32px; text-align: center; flex-direction: column; gap: 12px;
+  }
+  .error-icon { font-size: 2rem; }
+  .error-msg  { color: var(--text-dim); font-size: 0.85rem; line-height: 1.5; }
+  .retry-btn {
+    margin-top: 8px; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--accent); font-family: var(--font);
+    font-size: 0.85rem; padding: 10px 20px; cursor: pointer;
+  }
+
+  /* ── Appliance picker screen ── */
+  .screen-picker {
+    padding: 24px 16px;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .picker-heading {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    padding: 0 2px;
+  }
+  .appliance-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 16px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .appliance-card:active { background: var(--surface2); border-color: var(--accent); }
+  .appliance-card-name { flex: 1; font-size: 1rem; font-weight: 700; }
+  .appliance-card.active-appliance {
+    border-color: var(--accent);
+  }
+  .appliance-card.active-appliance .appliance-card-name {
+    color: var(--accent);
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- Header -->
+  <header>
+    <button v-if="screen === 'items'" class="header-back" @click="goBack">Back</button>
+    <button v-if="screen === 'sections' && appliances.length > 1" class="header-back" @click="goToPicker">Switch</button>
+    <div class="header-titles">
+      <div class="header-callsign">{{ callsign || 'Appliance Checks' }}</div>
+    </div>
+    <div v-if="weeks.length && screen !== 'picker'" class="week-selector-wrap">
+      <span class="week-selector-label">Week</span>
+      <select class="week-selector" :value="selectedWeekIndex" @change="onWeekChange($event.target.value)">
+        <option v-for="(w, i) in weeks" :key="i" :value="i">{{ w.label }}</option>
+      </select>
+    </div>
+  </header>
+
+  <!-- Loading -->
+  <div v-if="screen === 'loading'" class="screen active screen-loading">
+    <div class="spinner"></div>
+    <div class="loading-text">Loading sheet data…</div>
+  </div>
+
+  <!-- Error -->
+  <div v-if="screen === 'error'" class="screen active screen-error">
+    <div class="error-icon">⚠️</div>
+    <div class="error-msg">{{ errorMsg }}</div>
+    <button class="retry-btn" @click="loadData(sheetParam)">Retry</button>
+    <button v-if="appliances.length > 1" class="retry-btn" style="margin-top:4px" @click="goToPicker">Switch appliance</button>
+  </div>
+
+  <!-- Appliance picker -->
+  <div v-if="screen === 'picker'" class="screen active screen-picker">
+    <div class="picker-heading">Select Appliance</div>
+    <div
+      v-for="app in appliances"
+      :key="app.key"
+      :class="['appliance-card', app.key === sheetParam ? 'active-appliance' : '']"
+      @click="selectAppliance(app.key)"
+    >
+      <div class="appliance-card-name">{{ app.callsign }}</div>
+      <div class="section-chevron"><span class="chev chev-right"></span></div>
+    </div>
+  </div>
+
+  <!-- Section list -->
+  <div v-if="screen === 'sections'" class="screen active screen-sections">
+    <!-- Check type banner -->
+    <div class="check-type-banner">
+      <div class="check-type-left">
+        <div :class="['check-type-pill', isLastWeek ? 'monthly' : 'weekly']">
+          {{ isLastWeek ? 'Monthly' : 'Weekly' }}
+        </div>
+        <div class="check-type-desc">
+          {{ isLastWeek ? 'Final week — all checks active' : 'Monthly checks hidden until final week' }}
+        </div>
+      </div>
+      <button :class="['refresh-btn', refreshing ? 'spinning' : '']" @click="refreshData">
+        <span class="refresh-icon">&#8635;</span> Refresh
+      </button>
+    </div>
+
+    <!-- Section cards -->
+    <div
+      v-for="(section, si) in activeSections"
+      :key="si"
+      class="section-card"
+      @click="openSection(section.originalIndex)"
+    >
+      <div class="section-card-body">
+        <div class="section-card-name">{{ section.title }}</div>
+        <div class="section-card-meta">{{ section.filled }}/{{ section.total }} checked</div>
+      </div>
+      <div class="section-card-progress">
+        <div class="progress-label">{{ section.pct }}%</div>
+        <div class="progress-bar-track">
+          <div :class="['progress-bar-fill', section.pct === 100 ? 'complete' : '']" :style="{ width: section.pct + '%' }"></div>
+        </div>
+      </div>
+      <div class="section-chevron"><span class="chev chev-right"></span></div>
+    </div>
+  </div>
+
+  <!-- Items -->
+  <div v-if="screen === 'items'" class="screen active screen-items">
+    <!-- Sticky header -->
+    <div class="items-section-header">
+      <button class="header-nav-btn" :disabled="prevSectionIndex === null" @click="openSection(prevSectionIndex)">
+        <span class="chev chev-left"></span>
+      </button>
+      <div class="items-section-title-wrap">
+        <div class="items-section-name">
+          {{ currentSection.title }}
+          <span class="silent-refresh-spinner" :style="{ opacity: silentRefreshInFlight ? 1 : 0 }"></span>
+        </div>
+        <div class="items-section-count">{{ visibleItems.length }} items</div>
+      </div>
+      <button class="header-nav-btn" :disabled="nextSectionIndex === null" @click="openSection(nextSectionIndex)">
+        <span class="chev chev-right"></span>
+      </button>
+    </div>
+
+    <!-- Item rows -->
+    <div v-for="(item, ii) in visibleItems" :key="item.row" class="item-row">
+      <div class="item-meta">
+        <div class="item-label">{{ item.label }}</div>
+        <div v-if="item.qty && item.qty !== 'n/a' && item.qty !== '-'" class="item-qty">×{{ item.qty }}</div>
+      </div>
+
+      <!-- Y/N -->
+      <div v-if="item.inputType === 'yn'" class="yn-row">
+        <div class="yn-buttons">
+          <button
+            :class="['yn-btn', item.weekValues[selectedWeekIndex].yChecked ? 'y-active' : '', item.weekValues[selectedWeekIndex].saving ? 'saving' : '']"
+            @click="handleYN(item, selectedWeekIndex, 'Y')"
+          >Y</button>
+          <button
+            :class="['yn-btn', item.weekValues[selectedWeekIndex].nChecked ? 'n-active' : '', item.weekValues[selectedWeekIndex].saving ? 'saving' : '']"
+            @click="handleYN(item, selectedWeekIndex, 'N')"
+          >N</button>
+        </div>
+      </div>
+
+      <!-- Dropdown -->
+      <select
+        v-else-if="item.inputType === 'dropdown'"
+        class="item-select"
+        :value="item.weekValues[selectedWeekIndex].value"
+        @change="handleText(item, selectedWeekIndex, $event.target.value)"
+      >
+        <option value="">— select —</option>
+        <option v-for="opt in item.dropdownOptions" :key="opt" :value="opt">{{ opt }}</option>
+      </select>
+
+      <!-- Text -->
+      <div v-else-if="item.inputType === 'text'" class="text-input-wrap">
+        <input
+          type="text"
+          class="item-input"
+          :value="item.weekValues[selectedWeekIndex].value"
+          placeholder="Enter value…"
+          @blur="handleText(item, selectedWeekIndex, $event.target.value)"
+        />
+        <button
+          v-if="item.prevValue && !item.weekValues[selectedWeekIndex].value"
+          class="copy-prev-btn"
+          @click="copyPrev(item, selectedWeekIndex)"
+        >
+          <span class="copy-prev-label">Copy from last week</span>
+          <span class="copy-prev-val">{{ item.prevValue }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Bottom nav -->
+    <div class="section-bottom-nav">
+      <button class="nav-btn items-section-nav" :disabled="prevSectionIndex === null" @click="openSection(prevSectionIndex)">
+        <span class="nav-chevron"><span class="chev chev-left"></span></span>
+        <span class="nav-label">Prev</span>
+      </button>
+      <button class="nav-btn section-back-btn" @click="goBack">Back to sections</button>
+      <button class="nav-btn items-section-nav" :disabled="nextSectionIndex === null" @click="openSection(nextSectionIndex)">
+        <span class="nav-label">Next</span>
+        <span class="nav-chevron"><span class="chev chev-right"></span></span>
+      </button>
+    </div>
+  </div>
+  <!-- Refresh overlay — inside #app so it doesn't leak outside the iframe -->
+  <div :class="['sections-refresh-overlay', refreshOverlay ? 'active' : '']">
+    <div class="spinner"></div>
+    <div class="overlay-label">Refreshing…</div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// Force correct mobile scaling
+(function() {
+  const existing = document.querySelector('meta[name=viewport]');
+  if (existing) existing.remove();
+  const meta = document.createElement('meta');
+  meta.name = 'viewport';
+  meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no';
+  document.head.appendChild(meta);
+})();
+
+const { createApp, ref, computed, reactive, watch, nextTick } = Vue;
+
+createApp({
+  setup() {
+    // ── Baked-in config (server-side template values) ───────
+    const appliances   = <?!= applianceList ?>;  // [{key, callsign}] — no sheet IDs
+    const initialSheet = '<?= initialSheet ?>';  // pre-selected from ?sheet= param, or ''
+
+    // ── State ───────────────────────────────────────────────
+    const screen            = ref('loading');
+    const weeks             = ref([]);
+    const sections          = ref([]);
+    const selectedWeekIndex = ref(0);
+    const selectedSectionIndex = ref(null);
+    const callsign          = ref('');
+    const errorMsg          = ref('');
+    const refreshing        = ref(false);
+    const refreshOverlay    = ref(false);
+    const silentRefreshInFlight = ref(false);
+    const pendingWriteRows  = new Set();
+
+    // sheetParam is reactive — changes when the user switches appliance
+    const sheetParam = ref(
+      initialSheet ||
+      (appliances.length === 1 ? appliances[0].key : '')
+    );
+
+    // ── Computed ─────────────────────────────────────────────
+    const isLastWeek = computed(() =>
+      selectedWeekIndex.value === weeks.value.length - 1
+    );
+
+    const activeSectionIndices = computed(() => {
+      return sections.value
+        .map((sec, i) => ({ sec, i }))
+        .filter(({ sec }) => {
+          const hasActiveYn = sec.items.some(it =>
+            it.inputType === 'yn' && (it.scope === 'weekly' || isLastWeek.value)
+          );
+          const hasOther = sec.items.some(it => it.inputType !== 'yn');
+          return hasActiveYn || hasOther;
+        })
+        .map(({ i }) => i);
+    });
+
+    const activeSections = computed(() => {
+      const wi = selectedWeekIndex.value;
+      return activeSectionIndices.value.map(si => {
+        const section = sections.value[si];
+        const activeItems = section.items.filter(it => {
+          if (it.inputType === 'yn') return it.scope === 'weekly' || isLastWeek.value;
+          return true;
+        });
+        const total  = activeItems.length;
+        const filled = activeItems.filter(it => {
+          const wv = it.weekValues[wi];
+          if (!wv) return false;
+          if (it.inputType === 'yn')       return wv.yChecked || wv.nChecked;
+          return wv.value && wv.value !== '';
+        }).length;
+        return {
+          originalIndex: si,
+          title: section.title,
+          total, filled,
+          pct: total > 0 ? Math.round((filled / total) * 100) : 0,
+        };
+      });
+    });
+
+    const currentSection = computed(() =>
+      selectedSectionIndex.value !== null ? sections.value[selectedSectionIndex.value] : null
+    );
+
+    const visibleItems = computed(() => {
+      if (!currentSection.value) return [];
+      return currentSection.value.items.filter(item =>
+        item.inputType !== 'yn' || item.scope === 'weekly' || isLastWeek.value
+      );
+    });
+
+    const prevSectionIndex = computed(() => {
+      const active = activeSectionIndices.value;
+      const pos = active.indexOf(selectedSectionIndex.value);
+      return pos > 0 ? active[pos - 1] : null;
+    });
+
+    const nextSectionIndex = computed(() => {
+      const active = activeSectionIndices.value;
+      const pos = active.indexOf(selectedSectionIndex.value);
+      return pos >= 0 && pos < active.length - 1 ? active[pos + 1] : null;
+    });
+
+    // ── Data loading ─────────────────────────────────────────
+    function findClosestWeekIndex(ws) {
+      const today = new Date();
+      let idx = ws.length - 1, diff = Infinity;
+      ws.forEach((w, i) => {
+        const d = Math.abs(today - new Date(w.isoDate));
+        if (d < diff) { diff = d; idx = i; }
+      });
+      return idx;
+    }
+
+    function loadData(key) {
+      if (!key) { screen.value = 'picker'; return; }
+      sheetParam.value = key;
+      pendingWriteRows.clear();
+      selectedSectionIndex.value = null;
+      // Clear stale header content immediately so the old appliance's
+      // callsign and week selector don't show while the new one loads.
+      callsign.value = '';
+      weeks.value = [];
+      screen.value = 'loading';
+      google.script.run
+        .withSuccessHandler(data => {
+          weeks.value    = data.weeks;
+          sections.value = data.sections;
+          callsign.value = data.callsign || '';
+          selectedWeekIndex.value = findClosestWeekIndex(data.weeks);
+          screen.value = 'sections';
+        })
+        .withFailureHandler(err => {
+          errorMsg.value = 'Could not load sheet data: ' + (err.message || err);
+          screen.value = 'error';
+        })
+        .getSheetData(key);
+    }
+
+    function selectAppliance(key) {
+      loadData(key);
+    }
+
+    function goToPicker() {
+      screen.value = 'picker';
+    }
+
+    // ── Navigation ───────────────────────────────────────────
+    function openSection(si) {
+      selectedSectionIndex.value = si;
+      screen.value = 'items';
+      nextTick(() => {
+        const el = document.querySelector('.screen-items');
+        if (el) el.scrollTop = 0;
+      });
+      history.pushState({ section: si }, '');
+      silentRefresh();
+    }
+
+    function goBack() {
+      selectedSectionIndex.value = null;
+      screen.value = 'sections';
+      silentRefresh();
+    }
+
+    window.addEventListener('popstate', () => {
+      if (selectedSectionIndex.value !== null) {
+        goBack();
+      } else if (screen.value === 'sections' && appliances.length > 1) {
+        goToPicker();
+      }
+    });
+
+    function onWeekChange(idx) {
+      selectedWeekIndex.value = parseInt(idx, 10);
+    }
+
+    // ── Manual refresh ───────────────────────────────────────
+    function refreshData() {
+      refreshing.value = true;
+      refreshOverlay.value = true;
+      const prevWeekIndex = selectedWeekIndex.value;
+      // Capture key at fire time — if the user switches appliance before
+      // this response arrives, discard rather than overwriting the new
+      // appliance's state with stale data from the old one.
+      const keyAtFireTime = sheetParam.value;
+
+      google.script.run
+        .withSuccessHandler(data => {
+          refreshing.value = false;
+          refreshOverlay.value = false;
+          if (sheetParam.value !== keyAtFireTime) return;
+          weeks.value    = data.weeks;
+          sections.value = data.sections;
+          callsign.value = data.callsign || callsign.value;
+          selectedWeekIndex.value = prevWeekIndex < data.weeks.length
+            ? prevWeekIndex
+            : findClosestWeekIndex(data.weeks);
+          screen.value = 'sections';
+          selectedSectionIndex.value = null;
+        })
+        .withFailureHandler(() => {
+          refreshing.value = false;
+          refreshOverlay.value = false;
+          showToast('Could not refresh — check connection', 'error');
+        })
+        .getSheetData(keyAtFireTime);
+    }
+
+    // ── Silent refresh ───────────────────────────────────────
+    function silentRefresh() {
+      if (silentRefreshInFlight.value) return;
+      silentRefreshInFlight.value = true;
+      // Capture the key at fire time — if the user switches appliance before
+      // this response arrives, we discard the stale data rather than patching
+      // it into the wrong appliance's state.
+      const keyAtFireTime = sheetParam.value;
+      google.script.run
+        .withSuccessHandler(data => {
+          silentRefreshInFlight.value = false;
+          if (sheetParam.value !== keyAtFireTime) return;
+          patchState(data);
+        })
+        .withFailureHandler(() => {
+          silentRefreshInFlight.value = false;
+        })
+        .getSheetData(keyAtFireTime);
+    }
+
+    function patchState(data) {
+      const freshByRow = new Map();
+      data.sections.forEach(sec =>
+        sec.items.forEach(item => freshByRow.set(item.row, item))
+      );
+      sections.value.forEach(sec =>
+        sec.items.forEach(item => {
+          if (pendingWriteRows.has(item.row)) return;
+          const fresh = freshByRow.get(item.row);
+          if (fresh) item.weekValues = fresh.weekValues;
+        })
+      );
+    }
+
+    // ── Write handlers ───────────────────────────────────────
+    function handleYN(item, wi, button) {
+      const wv = item.weekValues[wi];
+      const week = weeks.value[wi];
+      const currentY = wv.yChecked;
+      const currentN = wv.nChecked;
+
+      let newY = false, newN = false;
+      if (button === 'Y') { newY = !currentY; }
+      else                { newN = !currentN; }
+
+      wv.yChecked = newY;
+      wv.nChecked = newN;
+      wv.saving   = true;
+
+      pendingWriteRows.add(item.row);
+      google.script.run
+        .withSuccessHandler(result => {
+          pendingWriteRows.delete(item.row);
+          wv.yChecked = result.yChecked;
+          wv.nChecked = result.nChecked;
+          wv.saving   = false;
+        })
+        .withFailureHandler(() => {
+          pendingWriteRows.delete(item.row);
+          wv.yChecked = currentY;
+          wv.nChecked = currentN;
+          wv.saving   = false;
+          showToast('Save failed — check connection', 'error');
+        })
+        .toggleYN(item.row, week.yCol, week.nCol, button, currentY, currentN, sheetParam.value);
+    }
+
+    function handleText(item, wi, value) {
+      const wv   = item.weekValues[wi];
+      const week = weeks.value[wi];
+      const prev = wv.value;
+      wv.value   = value;
+
+      pendingWriteRows.add(item.row);
+      google.script.run
+        .withSuccessHandler(() => { pendingWriteRows.delete(item.row); })
+        .withFailureHandler(() => {
+          pendingWriteRows.delete(item.row);
+          wv.value = prev;
+          showToast('Save failed — check connection', 'error');
+        })
+        .writeCellText(item.row, week.yCol, value, sheetParam.value);
+    }
+
+    function copyPrev(item, wi) {
+      handleText(item, wi, item.prevValue);
+    }
+
+    // ── Toast ─────────────────────────────────────────────────
+    let toastTimer;
+    function showToast(msg, type = '') {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = 'show ' + type;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { t.className = ''; }, 2500);
+    }
+
+    // ── Boot ─────────────────────────────────────────────────
+    // Auto-load if we have a pre-selected appliance, otherwise show picker
+    loadData(sheetParam.value);
+
+    return {
+      screen, weeks, sections, selectedWeekIndex, selectedSectionIndex,
+      callsign, errorMsg, refreshing, refreshOverlay, silentRefreshInFlight,
+      sheetParam, appliances,
+      isLastWeek, activeSections, activeSectionIndices,
+      currentSection, visibleItems, prevSectionIndex, nextSectionIndex,
+      loadData, openSection, goBack, goToPicker, selectAppliance,
+      onWeekChange, refreshData, handleYN, handleText, copyPrev,
+    };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>
