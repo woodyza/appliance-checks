@@ -59,7 +59,7 @@ A Check where every due Item is answered; an N counts as answered. Anything less
 _Avoid_: Done, submitted
 
 **Frozen**:
-A Check that is Complete or whose window has closed. It no longer picks up changes to its Check Sheet unless someone opts it in. A Check that isn't Frozen always reflects the latest Check Sheet.
+A Check that is Complete or whose window has closed. It no longer picks up changes to its Check Sheet unless someone opts it in, though its answers stay editable. A Check that isn't Frozen always reflects the latest Check Sheet.
 
 **Y / N**:
 The answer to a yes/no Item. Y means present and serviceable; N means missing, or faulty and needing removal from service.
