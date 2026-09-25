@@ -3,19 +3,31 @@ import { fetchSheet } from '../src/domain/import/fetch'
 import { parseCheckSheet } from '../src/domain/import/parse'
 import { type ImportReport, reconcile } from '../src/domain/import/reconcile'
 import { resolveSpreadsheetId } from '../src/domain/import/source'
+import type { Item, Section } from '../src/domain/types'
 import { ask } from './lib/prompt'
 import { getCurrentVersion, writeVersion } from './lib/store'
 import { parseProjectTarget, resolveTarget } from './lib/target'
 
-function printReport(report: ImportReport): void {
+function describe(item: Item | undefined): string {
+  if (!item) return ''
+  const kind = item.inputType === 'choice' ? `choice: ${(item.options ?? []).join(', ')}` : item.inputType
+  return ` (${kind}${item.scope === 'monthly' ? ', monthly' : ''})`
+}
+
+function printReport(report: ImportReport, sections: Section[]): void {
+  const items = new Map(
+    sections.flatMap((section) => section.items.map((item) => [`${section.title}\u0000${item.label}`, item] as const)),
+  )
+  const find = (section: string, label: string): Item | undefined => items.get(`${section}\u0000${label}`)
+
   console.log(`Matched: ${report.matched.length}`)
   console.log(`Changed: ${report.changed.length}`)
   for (const change of report.changed) {
-    console.log(`  ${change.section} / ${change.label}: ${change.fields.join(', ')}`)
+    console.log(`  ${change.section} / ${change.label}: ${change.fields.join(', ')}${describe(find(change.section, change.label))}`)
   }
   console.log(`Added: ${report.added.length}`)
   for (const item of report.added) {
-    console.log(`  ${item.section} / ${item.label}`)
+    console.log(`  ${item.section} / ${item.label}${describe(find(item.section, item.label))}`)
   }
   console.log(`Removed: ${report.removed.length}`)
   for (const item of report.removed) {
@@ -57,7 +69,7 @@ async function main(): Promise<void> {
   const parsed = parseCheckSheet(grid)
   const { sections, report, unchanged } = reconcile(current?.sections ?? null, parsed)
 
-  printReport(report)
+  printReport(report, sections)
 
   const sameSpreadsheet = current?.origin.type === 'import' && current.origin.spreadsheetId === spreadsheetId
   if (unchanged && sameSpreadsheet) {
