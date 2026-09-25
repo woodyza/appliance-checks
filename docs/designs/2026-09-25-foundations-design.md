@@ -65,6 +65,7 @@ Pure functions in `src/domain/import/`, runnable in Node now and the browser lat
    - Stops at the "MISSING - DEFECTS - ISSUES" row.
    - Errors: no Section header, no Y/N pair, duplicate Section titles, duplicate Item labels within a Section.
 3. `reconcile(current, parsed)`: matches Sections by title and Items by Section title + label (case and whitespace insensitive). Matched Items keep their id and take the new fields; unmatched get new ids. Reports matched / changed / added / removed. A moved Item is removed + added. No changes means no new version.
+   - Renaming a Section in the sheet likewise re-ids all its Items. Accepted because the import is expected once per appliance; after that, Check Sheets are maintained in the editor (#7), which edits by id.
 
 CLI tools:
 
