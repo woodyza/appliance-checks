@@ -17,7 +17,8 @@ Stand up the Firebase app so a brigade's Check Sheets exist in Firestore and can
   tests/
     domain/        unit tests + Sheets API fixtures
     rules/         Firestore rules tests
-  firebase.json, .firebaserc, firestore.rules, firestore.indexes.json
+  public/robots.txt
+  firebase.json, firestore.rules, firestore.indexes.json   (.firebaserc is gitignored)
   ```
 - Makefile: `check` (lint, typecheck, unit tests, rules tests under `firebase emulators:exec`), `dev` (emulators + Vite), `deploy ENV=dev|prod`, and the clasp targets renamed `apps-script-push` / `apps-script-deploy`.
 - Account guard: deploy and CLI tools print the target project and active account (Firebase CLI login, or gcloud ADC) and require y/N before touching `dev` or `prod`. The emulator skips it.
@@ -75,7 +76,7 @@ CLI tools:
 
 ## Environments and deploy
 
-- `dev` and `prod` Firebase projects as `.firebaserc` aliases, plus local emulators (Firestore, Hosting).
+- `dev` and `prod` Firebase projects as `.firebaserc` aliases, plus local emulators (Firestore, Hosting). The repo is public and the project id is the Hosting address, so `.firebaserc` is gitignored and the prod id gets a random suffix. Hosting sends `X-Robots-Tag: noindex, nofollow` and serves a disallow-all `robots.txt`. App Check (#5) and a Blaze spending cap (#8) handle abuse and cost.
 - `make provision ENV=dev|prod PROJECT_ID=<id>` creates or checks each project (Firebase, Firestore, Hosting site, Sheets API and key, `.firebaserc` alias), skipping steps already done. Setup and account migration are documented in `docs/infra-setup.md`.
 - Firebase web config per environment in committed `.env.dev` / `.env.prod`.
 - `make deploy ENV=dev`: `vite build --mode dev`, then `firebase deploy --project dev --only hosting,firestore:rules,firestore:indexes`, behind the account guard. Hosting rewrites to `index.html`.

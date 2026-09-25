@@ -1,6 +1,7 @@
 import { parseArgs } from 'node:util'
 import { assertNoFirebaseToken, firebaseCliAccount, gcloudAccount } from './lib/accounts'
 import { type Firebaserc, readFirebaserc, withAlias, writeFirebaserc } from './lib/firebaserc'
+import { hasRandomSuffix } from './lib/projectId'
 import { confirm } from './lib/prompt'
 import { capture, run } from './lib/shell'
 
@@ -128,7 +129,7 @@ function writeAlias(env: string, updated: Firebaserc | null): void {
     return
   }
   writeFirebaserc(updated)
-  console.log('  written (commit it)')
+  console.log('  written (it is gitignored, keep a note of the ids elsewhere)')
 }
 
 async function main(): Promise<void> {
@@ -156,6 +157,10 @@ async function main(): Promise<void> {
   console.log(`Region:      ${region}`)
   console.log(`gcloud account:       ${gcloud}`)
   console.log(`Firebase CLI account: ${firebase}`)
+  if (env === 'prod' && !hasRandomSuffix(projectId)) {
+    console.log('\nWarning: this prod id has no random suffix (e.g. appliance-checks-7f3kq2), so the site')
+    console.log('is easy to guess and find. Project ids are permanent; see docs/infra-setup.md.\n')
+  }
   const rc = readFirebaserc() ?? {}
   const aliasUpdate = rc.projects?.[env] === projectId ? null : withAlias(rc, env, projectId)
   console.log(`.firebaserc ${env}:     ${aliasUpdate === null ? 'already set' : 'will be written'}`)

@@ -29,11 +29,11 @@ A Google account that has never used Firebase has to accept the Firebase terms o
 
 ## 3. Provision each environment
 
-Project ids are globally unique and can't be changed, so pick them first (e.g. `appliance-checks-dev`, `appliance-checks-prod`).
+Project ids are globally unique and permanent, and the site is served at `<project-id>.web.app`, so the id is effectively the site's address. For prod, add a random suffix so it can't be guessed (e.g. `appliance-checks-7f3kq2`; `make provision` warns if it's missing), and don't publish it: this repo is public, so ids stay out of git. `.firebaserc` is gitignored; keep a note of the ids somewhere private. Keep `dev` on the free Spark plan, so abuse can only take it offline, never cost money.
 
 ```bash
-make provision ENV=dev PROJECT_ID=appliance-checks-dev
-make provision ENV=prod PROJECT_ID=appliance-checks-prod
+make provision ENV=dev PROJECT_ID=<dev project id>
+make provision ENV=prod PROJECT_ID=<prod project id>
 ```
 
 For each project this creates, or checks and skips if it's already there:
@@ -43,7 +43,7 @@ For each project this creates, or checks and skips if it's already there:
 - the `(default)` Firestore database, in `australia-southeast1` unless you pass `REGION=...` (a database's location can't be changed later)
 - the default Hosting site
 - a Sheets API key named `appliance-checks-sheets-cli`, restricted to the Sheets API, for the CLI import (a browser import will need its own referrer-restricted key)
-- the environment's alias in `.firebaserc` (commit it)
+- the environment's alias in `.firebaserc` (gitignored; on a new machine, re-running `make provision` recreates it)
 
 It's safe to re-run, e.g. after a step failed or a project was partly set up in the console. The key itself isn't printed; the script ends with the command to load it into your shell as `SHEETS_API_KEY`.
 
@@ -55,6 +55,8 @@ npm run cli:create-brigade -- --project dev --name "Mangawhai" --check-day 1
 npm run cli:add-appliance -- --project dev --brigade <slug> --id 8011 --callsign "Mangawhai 8011"
 npm run cli:import-check-sheet -- --project dev --brigade <slug> --appliance 8011 --spreadsheet <spreadsheet id>
 ```
+
+Hosting sends `X-Robots-Tag: noindex, nofollow` and serves a `robots.txt` that disallows everything, so well-behaved crawlers don't index the site even if a link leaks.
 
 `make deploy` replaces Hosting content and Firestore rules. `firestore.indexes.json` is the source of truth for indexes, so if any were created in the console the deploy offers to delete them: answer No unless you mean it.
 
