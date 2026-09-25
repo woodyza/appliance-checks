@@ -190,6 +190,38 @@ Writing:
 - ADR 0001: anonymous list queries are limited to one brigade's path, and Checks to a recent date range.
 - #5's "done when" should read "unbounded list queries on Checks rejected, bounded allowed, cross-brigade rejected" instead of "anonymous list queries rejected".
 
+## Notes
+
+Research findings from the design session. The commands are from the CLI help and the API discovery doc, not tried yet.
+
+- Setup commands and calls:
+  - Web app: `firebase apps:create WEB <name>`, then `firebase apps:sdkconfig WEB <appId>`.
+  - reCAPTCHA key: `gcloud recaptcha keys create --web --integration-type=score --domains=<project>.web.app,<project>.firebaseapp.com`.
+  - Provider: `PATCH https://firebaseappcheck.googleapis.com/v1/projects/{project}/apps/{appId}/recaptchaEnterpriseConfig` with `{ siteKey, tokenTtl }`.
+  - Enforcement: `PATCH https://firebaseappcheck.googleapis.com/v1/projects/{project}/services/firestore.googleapis.com` with `{ enforcementMode: 'ENFORCED' }` (the others are `OFF` and `UNENFORCED`).
+  - Debug tokens: `firebase appcheck:debugtokens` or the `debugTokens.create` endpoint.
+- Enforcement takes up to 15 minutes to take effect, so wait before verifying on `dev`.
+- Enterprise on Spark only gets 4 of its 11 score levels (all 11 need Blaze).
+- A 403 from the App Check token exchange (eg a low reCAPTCHA score, commonly Safari/iOS or private browsing) makes the SDK stop requesting tokens for a day. Until then, every Firestore request from that tab fails.
+  - So a run of failed writes means "this device can't save right now", not a one-off. The toast should say so rather than suggest retrying.
+  - See firebase-js-sdk#9135 (open).
+- A `permission-denied` from App Check is treated as permanent, and the SDK drops the queued write. That's harmless here: online-first mode reverts the Item visibly. But it's a reason not to turn on offline persistence later without handling it.
+- The Firestore emulator doesn't enforce App Check, and `@firebase/rules-unit-testing` doesn't involve it (inferred: neither is documented).
+- Don't add `localhost` to the reCAPTCHA key's domains; the Firebase docs warn against it.
+- The Firestore pricing docs don't say whether rules-denied or App Check-rejected requests are billed. The only documented costs are a minimum of one read per query, and `get()`/`exists()` calls inside rules being billed even when the request is denied.
+
+Sources:
+
+- https://firebase.google.com/docs/app-check/web/recaptcha-enterprise-provider
+- https://firebase.google.com/docs/app-check/web/recaptcha-provider
+- https://firebase.google.com/docs/app-check/enable-enforcement
+- https://firebase.google.com/docs/app-check/web/debug-provider
+- https://firebaseappcheck.googleapis.com/$discovery/rest?version=v1
+- https://docs.cloud.google.com/sdk/gcloud/reference/recaptcha/keys/create
+- https://docs.cloud.google.com/recaptcha/docs/compare-tiers
+- https://firebase.google.com/docs/firestore/pricing
+- https://github.com/firebase/firebase-js-sdk/issues/9135
+
 ## Out of scope
 
 Admin sign-in and Monthly Reports (#6), the Check Sheet editor (#7), offline persistence, per-brigade time zones, and checking values against their Item's input type in rules.
