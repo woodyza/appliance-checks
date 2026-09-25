@@ -54,3 +54,11 @@ export interface ParsedSection {
 export interface ParsedCheckSheet {
   sections: ParsedSection[]
 }
+
+export interface Check {
+  applianceId: string
+  scheduledDate: string
+  monthly: boolean
+  checkSheetVersion: number
+  responses: Record<string, string>
+}
