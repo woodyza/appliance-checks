@@ -1,18 +1,50 @@
-.PHONY: push deploy test-url
+JAVA_HOME_21 ?= /opt/homebrew/opt/openjdk@21
+EMULATOR_PATH := $(JAVA_HOME_21)/bin:$(PATH)
 
-# Push local code to Apps Script
-push:
-	clasp push --force
+.PHONY: check lint typecheck test test-unit test-emulator dev provision deploy \
+	apps-script-push apps-script-deploy apps-script-test-url
 
-# Get the latest deployment ID
-get-latest-deployment-id:
-	@clasp deployments | head -3 | tail -1 | awk '{print $$2}'
+# Lint, typecheck and run the full test suite (unit + emulator).
+check: lint typecheck test
 
-# Push and update the latest deployment with a new version
-deploy: push
-	@DEPLOYMENT_ID=$$(clasp deployments | head -3 | tail -1 | awk '{print $$2}') && \
-	clasp deploy --deploymentId $$DEPLOYMENT_ID --description "Mangawhai Truck Checks"
+lint:
+	npm run lint
 
-# Get the URL of the most recent test (HEAD) deployment
-test-url:
-	@clasp deployments | grep "@HEAD" | awk '{print "https://script.google.com/macros/s/" $$2 "/exec"}'
+typecheck:
+	npm run typecheck
+
+test: test-unit test-emulator
+
+test-unit:
+	npm run test:unit
+
+# firebase-tools' Firestore emulator requires Java 21+; the system default may be older,
+# so this prepends Homebrew's openjdk@21 to PATH. Override JAVA_HOME_21 if yours lives elsewhere.
+test-emulator:
+	PATH="$(EMULATOR_PATH)" npm run test:emulator
+
+# Run these in two terminals (the emulators need Java 21+ on PATH, see test-emulator above):
+#   PATH="$(EMULATOR_PATH)" npm run emulators
+#   npm run dev
+dev:
+	@echo 'Run in one terminal: PATH="$(EMULATOR_PATH)" npm run emulators'
+	@echo 'Run in another:      npm run dev'
+
+# make provision ENV=dev|prod PROJECT_ID=<id> [REGION=<region>]; see docs/infra-setup.md
+provision:
+	npx tsx cli/provision.ts --env $(ENV) --project-id $(PROJECT_ID) $(if $(REGION),--region $(REGION))
+
+# make deploy ENV=dev|prod
+deploy:
+	npx tsx cli/deploy.ts --project $(ENV)
+
+# Apps Script app in apps-script/ (clasp installed globally, see apps-script/README.md).
+apps-script-push:
+	cd apps-script && clasp push --force
+
+apps-script-deploy: apps-script-push
+	@DEPLOYMENT_ID=$$(cd apps-script && clasp deployments | head -3 | tail -1 | awk '{print $$2}') && \
+	cd apps-script && clasp deploy --deploymentId $$DEPLOYMENT_ID --description "Mangawhai Truck Checks"
+
+apps-script-test-url:
+	@cd apps-script && clasp deployments | grep "@HEAD" | awk '{print "https://script.google.com/macros/s/" $$2 "/exec"}'

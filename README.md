@@ -1,112 +1,55 @@
-# Mangawhai Brigade Appliance Checks
+# Appliance Checks
 
-A mobile-optimised web app for completing weekly and monthly appliance checks, replacing a Google Sheets-based manual process. Built on Google Apps Script with a Vue 3 frontend — no external infrastructure required.
+A brigade's routine checks that each appliance's equipment is present and serviceable, recorded on a phone at the appliance rather than on paper or a spreadsheet. Terminology is defined in [`CONTEXT.md`](./CONTEXT.md).
 
-## How it works
+Each brigade gets an unguessable Brigade Link (`https://<host>/{slug}`), reached almost entirely via QR codes on its appliances. No sign-in is needed to run a Check; editing Check Sheets and other admin tasks require an authenticated Brigade Admin or VSO (not yet built — see [the design doc](./docs/designs/2026-09-25-foundations-design.md)).
 
-The app reads check data directly from Google Sheets (one sheet per appliance) and presents it as a touch-friendly checklist. Checks are written back to the sheet in real time as the user taps Y/N buttons, selects dropdowns, or enters text values.
-
-Each appliance has a QR code in the engine bay that opens the app pre-selected to that appliance's sheet. The bare URL without a `?sheet=` parameter shows an appliance picker instead.
-
-## Repository structure
+## Repository layout
 
 ```
-Code.gs          # Apps Script backend — sheet reads, writes, doGet
-Index.html       # Vue 3 frontend — single page app
-appsscript.json  # Apps Script manifest (access level, runtime config)
-Makefile         # clasp push/deploy helpers
+apps-script/     the original Google Apps Script app (superseded, see apps-script/README.md)
+src/
+  domain/        pure TS: types, slug generation, Check Sheet import (fetch, parse, reconcile)
+  views/         Vue views
+cli/             admin CLI tools (provision, create-brigade, add-appliance, import-check-sheet, deploy)
+tests/
+  domain/        unit tests
+  rules/         Firestore rules tests (emulator)
+  cli/           CLI/Admin SDK tests (emulator)
+firebase.json, firestore.rules, firestore.indexes.json
 ```
 
-> **Note:** Sheet IDs are stored as Script Properties, not in source. See setup instructions below.
+Data model: see [the design doc](./docs/designs/2026-09-25-foundations-design.md#data-model). Decisions worth keeping are recorded as ADRs in [`docs/adr/`](./docs/adr/).
 
-## Sheet format
+## Prerequisites
 
-The app expects each appliance sheet to follow this layout:
+- Node 26+ and npm.
+- A JDK at version 21+ for the Firestore emulator (firebase-tools no longer supports older Java). `make check`/`make test` run the emulator commands with `JAVA_HOME_21` (defaults to Homebrew's `openjdk@21`) prepended to `PATH` for you; override it if yours lives elsewhere. `make dev` just prints the two commands to run (see below) — it doesn't run them, so the `PATH=...` prefix it prints still applies. Running `npm run test:emulator` or `npm run emulators` directly (without `make`/the printed command) needs a JDK 21+ `java` on your `PATH` yourself, e.g. `PATH="/opt/homebrew/opt/openjdk@21/bin:$PATH" npm run test:emulator`.
+- For `dev`/`prod` (not the emulator): gcloud and the Firebase CLI logged in as the same account. Setting up the Firebase projects is covered in [`docs/infra-setup.md`](./docs/infra-setup.md).
+- `clasp` (installed globally, authenticated) if you're working on the Apps Script app — see `apps-script/README.md`.
 
-| Row | Content |
-|-----|---------|
-| 1–2 | Title / registration headers |
-| 3   | Date headers — one per week column pair, merged across Y/N cols |
-| 4+  | Section header rows (col B = "Quantity") and item rows |
+## `make` targets
 
-Columns: A = item label, B = quantity/`FUEL`/`n/a`, C onwards = alternating Y/N column pairs per week.
+- `make check` — lint, typecheck, unit tests, emulator tests (the full CI-equivalent check).
+- `make test` — unit tests + emulator tests only.
+- `make test-unit` / `make test-emulator` — either suite on its own.
+- `make lint` / `make typecheck`
+- `make dev` — prints the two commands to run (emulators, then Vite) in separate terminals; it doesn't run them itself.
+- `make provision ENV=dev|prod PROJECT_ID=<id>` — creates or checks the Firebase project and its Firestore, Hosting and Sheets API key; safe to re-run. See [`docs/infra-setup.md`](./docs/infra-setup.md).
+- `make deploy ENV=dev|prod` — builds and deploys Hosting + Firestore rules/indexes to that environment, behind an account confirmation prompt.
+- `make apps-script-push` / `make apps-script-deploy` / `make apps-script-test-url` — the Apps Script app's clasp commands, run from `apps-script/`.
 
-Input type is detected from cell validation:
-- **Checkbox validation** → Y/N toggle buttons
-- **Dropdown (VALUE_IN_LIST) validation** → select input
-- **No validation** → free text input
+Single test file: `npx vitest run <path>` for unit tests, or, for rules/CLI tests, run it through the emulator directly, e.g.:
+`PATH="/opt/homebrew/opt/openjdk@21/bin:$PATH" npx firebase emulators:exec --only firestore --project demo-appliance-checks "vitest run --project emulator <path>"`.
 
-Monthly items are identified by a dark grey cell background (`#434343`) on their Y column.
+## CLI tools
 
-## Setup
-
-### Prerequisites
-
-- [clasp](https://github.com/google/clasp) installed and authenticated (`clasp login`)
-- A standalone Apps Script project created at [script.google.com](https://script.google.com)
-- The project's Script ID added to `.clasp.json`
-
-### 1. Push the code
+All take `--project dev|prod|emulator` (default `emulator`); `dev`/`prod` print the target project and active account and require a `y` confirmation.
 
 ```bash
-make push
+npm run cli:create-brigade -- --name "Mangawhai" --check-day 1
+npm run cli:add-appliance -- --brigade <slug> --id 8011 --callsign "Mangawhai 8011"
+SHEETS_API_KEY=... npm run cli:import-check-sheet -- --brigade <slug> --appliance 8011 [--spreadsheet <id>] [--dry-run]
 ```
 
-### 2. Configure appliance sheet IDs
-
-Sheet IDs are kept out of source control and stored as a Script Property. In the Apps Script editor, open the **Script Properties** panel (**Project Settings → Script Properties**) and add one property:
-
-| Key | Value |
-|-----|-------|
-| `APPLIANCES` | See format below |
-
-The value should be a JSON object mapping URL-safe keys to appliance config:
-
-```json
-{
-  "mangawhai801":  { "sheetId": "YOUR_SHEET_ID", "callsign": "Mangawhai 801" },
-  "mangawhai8011": { "sheetId": "YOUR_SHEET_ID", "callsign": "Mangawhai 8011" },
-  "mangawhai8029": { "sheetId": "YOUR_SHEET_ID", "callsign": "MANGAWHAI 8029" }
-}
-```
-
-Alternatively, fill in the `setApplianceProperties()` function in `Code.gs` with the real sheet IDs, run it once from the editor, then remove it before committing.
-
-The deploying Google account must have **edit access** to all three sheets.
-
-### 3. Deploy
-
-```bash
-make deploy
-```
-
-The web app should be deployed with **Execute as: Me** and **Who has access: Anyone**. This is set in `appsscript.json` via:
-
-```json
-"webapp": {
-  "executeAs": "USER_DEPLOYING",
-  "access": "ANYONE_ANONYMOUS"
-}
-```
-
-### 4. QR codes
-
-Generate a QR code for each appliance using its URL:
-
-```
-https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec?sheet=mangawhai801
-https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec?sheet=mangawhai8011
-https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec?sheet=mangawhai8029
-```
-
-The bare URL without `?sheet=` shows the appliance picker and works as a fallback.
-
-## Development
-
-```bash
-make push      # push latest code to Apps Script (no new deployment)
-make deploy    # push and update the live deployment
-make test-url  # print the HEAD (test) deployment URL
-```
-
-Changes to the live deployment require `make deploy`. The test deployment (HEAD) updates on every `make push` and can be used for testing without affecting the live QR codes.
+`import-check-sheet` reads the spreadsheet id from the current Check Sheet version when it was itself imported; otherwise `--spreadsheet` is required. It prints an import report (matched/changed/added/removed) and does nothing if nothing changed.
