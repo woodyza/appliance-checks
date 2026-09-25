@@ -1,7 +1,7 @@
 JAVA_HOME_21 ?= /opt/homebrew/opt/openjdk@21
 EMULATOR_PATH := $(JAVA_HOME_21)/bin:$(PATH)
 
-.PHONY: check lint typecheck test test-unit test-emulator dev deploy \
+.PHONY: check lint typecheck test test-unit test-emulator dev provision deploy \
 	apps-script-push apps-script-deploy apps-script-test-url
 
 # Lint, typecheck and run the full test suite (unit + emulator).
@@ -29,6 +29,10 @@ test-emulator:
 dev:
 	@echo 'Run in one terminal: PATH="$(EMULATOR_PATH)" npm run emulators'
 	@echo 'Run in another:      npm run dev'
+
+# make provision ENV=dev|prod PROJECT_ID=<id> [REGION=<region>]; see docs/infra-setup.md
+provision:
+	npx tsx cli/provision.ts --env $(ENV) --project-id $(PROJECT_ID) $(if $(REGION),--region $(REGION))
 
 # make deploy ENV=dev|prod
 deploy:

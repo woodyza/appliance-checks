@@ -11,7 +11,7 @@ apps-script/     the original Google Apps Script app (superseded, see apps-scrip
 src/
   domain/        pure TS: types, slug generation, Check Sheet import (fetch, parse, reconcile)
   views/         Vue views
-cli/             admin CLI tools (create-brigade, add-appliance, import-check-sheet, deploy)
+cli/             admin CLI tools (provision, create-brigade, add-appliance, import-check-sheet, deploy)
 tests/
   domain/        unit tests
   rules/         Firestore rules tests (emulator)
@@ -25,7 +25,7 @@ Data model: see [the design doc](./docs/designs/2026-09-25-foundations-design.md
 
 - Node 26+ and npm.
 - A JDK at version 21+ for the Firestore emulator (firebase-tools no longer supports older Java). `make check`/`make test` run the emulator commands with `JAVA_HOME_21` (defaults to Homebrew's `openjdk@21`) prepended to `PATH` for you; override it if yours lives elsewhere. `make dev` just prints the two commands to run (see below) — it doesn't run them, so the `PATH=...` prefix it prints still applies. Running `npm run test:emulator` or `npm run emulators` directly (without `make`/the printed command) needs a JDK 21+ `java` on your `PATH` yourself, e.g. `PATH="/opt/homebrew/opt/openjdk@21/bin:$PATH" npm run test:emulator`.
-- For the `dev`/`prod` CLI targets (not the emulator): `gcloud auth application-default login`, so the CLI can identify the active account before touching a real project.
+- For `dev`/`prod` (not the emulator): gcloud and the Firebase CLI logged in as the same account. Setting up the Firebase projects is covered in [`docs/infra-setup.md`](./docs/infra-setup.md).
 - `clasp` (installed globally, authenticated) if you're working on the Apps Script app — see `apps-script/README.md`.
 
 ## `make` targets
@@ -35,6 +35,7 @@ Data model: see [the design doc](./docs/designs/2026-09-25-foundations-design.md
 - `make test-unit` / `make test-emulator` — either suite on its own.
 - `make lint` / `make typecheck`
 - `make dev` — prints the two commands to run (emulators, then Vite) in separate terminals; it doesn't run them itself.
+- `make provision ENV=dev|prod PROJECT_ID=<id>` — creates or checks the Firebase project and its Firestore, Hosting and Sheets API key; safe to re-run. See [`docs/infra-setup.md`](./docs/infra-setup.md).
 - `make deploy ENV=dev|prod` — builds and deploys Hosting + Firestore rules/indexes to that environment, behind an account confirmation prompt.
 - `make apps-script-push` / `make apps-script-deploy` / `make apps-script-test-url` — the Apps Script app's clasp commands, run from `apps-script/`.
 

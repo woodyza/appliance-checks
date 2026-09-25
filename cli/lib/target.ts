@@ -1,7 +1,7 @@
-import { readFileSync } from 'node:fs'
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app'
 import { getFirestore, type Firestore } from 'firebase-admin/firestore'
 import { GoogleAuth } from 'google-auth-library'
+import { readFirebaserc } from './firebaserc'
 import { confirm } from './prompt'
 
 export type ProjectTarget = 'dev' | 'prod' | 'emulator'
@@ -15,21 +15,14 @@ export function parseProjectTarget(value: string | undefined): ProjectTarget {
   throw new Error(`--project must be one of dev, prod, emulator (got "${value}").`)
 }
 
-interface Firebaserc {
-  projects?: Record<string, string>
-}
-
 export function readProjectId(target: 'dev' | 'prod'): string {
-  let raw: string
-  try {
-    raw = readFileSync('.firebaserc', 'utf8')
-  } catch {
-    throw new Error(`.firebaserc not found: cannot resolve the "${target}" project alias.`)
+  const rc = readFirebaserc()
+  if (rc === null) {
+    throw new Error(`.firebaserc not found: cannot resolve the "${target}" project alias. See docs/infra-setup.md.`)
   }
-  const config = JSON.parse(raw) as Firebaserc
-  const projectId = config.projects?.[target]
+  const projectId = rc.projects?.[target]
   if (!projectId) {
-    throw new Error(`.firebaserc has no "${target}" project alias.`)
+    throw new Error(`.firebaserc has no "${target}" project alias. See docs/infra-setup.md.`)
   }
   return projectId
 }
