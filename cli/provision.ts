@@ -32,7 +32,7 @@ function ensureProject(env: string, projectId: string): void {
   if (!gcpExists) {
     run('npx', [
       'firebase', 'projects:create', projectId,
-      '--display-name', `Appliance Checks (${env})`,
+      '--display-name', `Appliance Checks ${env}`,
       '--non-interactive',
     ])
     return
@@ -158,7 +158,7 @@ async function main(): Promise<void> {
   console.log(`gcloud account:       ${gcloud}`)
   console.log(`Firebase CLI account: ${firebase}`)
   if (env === 'prod' && !hasRandomSuffix(projectId)) {
-    console.log('\nWarning: this prod id has no random suffix (e.g. appliance-checks-7f3kq2), so the site')
+    console.log('\nWarning: this prod id has no random suffix (e.g. appliance-checks-<6 random letters and digits>), so the site')
     console.log('is easy to guess and find. Project ids are permanent; see docs/infra-setup.md.\n')
   }
   const rc = readFirebaserc() ?? {}

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { hasRandomSuffix } from '../../../cli/lib/projectId'
 
 describe('hasRandomSuffix', () => {
-  it.each(['appliance-checks-7f3kq2', 'checks-a1b2'])('accepts %s', (projectId) => {
+  it.each(['checks-x9y8z7', 'checks-a1b2'])('accepts %s', (projectId) => {
     expect(hasRandomSuffix(projectId)).toBe(true)
   })
 
