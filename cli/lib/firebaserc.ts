@@ -11,8 +11,9 @@ export function readFirebaserc(): Firebaserc | null {
   let raw: string
   try {
     raw = readFileSync(PATH, 'utf8')
-  } catch {
-    return null
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw error
   }
   return JSON.parse(raw) as Firebaserc
 }

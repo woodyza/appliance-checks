@@ -17,9 +17,15 @@ export function firebaseCliAccount(): string {
   return match[1]
 }
 
+const GCLOUD_CREDENTIAL_OVERRIDES = ['CLOUDSDK_AUTH_ACCESS_TOKEN_FILE', 'CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE']
+
 export function gcloudAccount(): string {
+  const override = GCLOUD_CREDENTIAL_OVERRIDES.find((name) => process.env[name])
+  if (override) {
+    throw new Error(`${override} is set: gcloud would ignore the active account. Unset it first.`)
+  }
   const account = capture('gcloud', ['config', 'get-value', 'account']).stdout
-  if (!account || account === '(unset)') {
+  if (!account) {
     throw new Error('No active gcloud account. Run `gcloud auth login` first.')
   }
   return account

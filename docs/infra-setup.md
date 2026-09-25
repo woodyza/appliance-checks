@@ -11,9 +11,17 @@ gcloud config get-value account
 npx firebase login:list
 ```
 
-Switch with `gcloud config set account <email>` (or `gcloud auth login`) and `npx firebase login:use <email>` (or `npx firebase login`). `make provision` refuses to run if the two differ, and asks for confirmation before changing anything.
+If you use gcloud for other work, give this project its own configuration so switching doesn't touch the other one:
 
-The import and brigade CLI tools also use Application Default Credentials: `gcloud auth application-default login` as the same account.
+```bash
+gcloud config configurations create appliance-checks   # creates and activates it
+gcloud auth login                                       # pick the account for this project
+gcloud config configurations activate default           # to switch back later
+```
+
+For the Firebase CLI, run `npx firebase login` (or `npx firebase login:use <email>`) inside the repo: `login:use` pins the account for this directory only. `make provision` refuses to run if the gcloud and Firebase CLI accounts differ, and asks for confirmation before changing anything.
+
+The brigade and import CLI tools use Application Default Credentials instead: `gcloud auth application-default login` as the same account. ADC is machine-wide, not per gcloud configuration, so re-run it when switching; the tools show the ADC account and ask before touching `dev` or `prod`.
 
 ## 2. One-off manual step
 
@@ -31,10 +39,10 @@ make provision ENV=prod PROJECT_ID=appliance-checks-prod
 For each project this creates, or checks and skips if it's already there:
 
 - the Google Cloud project with Firebase added
-- the Firestore, Sheets and API Keys APIs
+- the Firestore, Firebase Rules, Firebase Hosting, Sheets and API Keys APIs
 - the `(default)` Firestore database, in `australia-southeast1` unless you pass `REGION=...` (a database's location can't be changed later)
 - the default Hosting site
-- a Sheets API key named `appliance-checks-sheets`, restricted to the Sheets API
+- a Sheets API key named `appliance-checks-sheets-cli`, restricted to the Sheets API, for the CLI import (a browser import will need its own referrer-restricted key)
 - the environment's alias in `.firebaserc` (commit it)
 
 It's safe to re-run, e.g. after a step failed or a project was partly set up in the console. The key itself isn't printed; the script ends with the command to load it into your shell as `SHEETS_API_KEY`.
@@ -47,6 +55,8 @@ npm run cli:create-brigade -- --project dev --name "Mangawhai" --check-day 1
 npm run cli:add-appliance -- --project dev --brigade <slug> --id 8011 --callsign "Mangawhai 8011"
 npm run cli:import-check-sheet -- --project dev --brigade <slug> --appliance 8011 --spreadsheet <spreadsheet id>
 ```
+
+`make deploy` replaces Hosting content and Firestore rules. `firestore.indexes.json` is the source of truth for indexes, so if any were created in the console the deploy offers to delete them: answer No unless you mean it.
 
 The spreadsheet id is the long string in the sheet's URL (`/spreadsheets/d/<id>/edit`), and the sheet must be viewable by anyone with the link.
 

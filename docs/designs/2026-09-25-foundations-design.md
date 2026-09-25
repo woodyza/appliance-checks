@@ -79,7 +79,7 @@ CLI tools:
 - `make provision ENV=dev|prod PROJECT_ID=<id>` creates or checks each project (Firebase, Firestore, Hosting site, Sheets API and key, `.firebaserc` alias), skipping steps already done. Setup and account migration are documented in `docs/infra-setup.md`.
 - Firebase web config per environment in committed `.env.dev` / `.env.prod`.
 - `make deploy ENV=dev`: `vite build --mode dev`, then `firebase deploy --project dev --only hosting,firestore:rules,firestore:indexes`, behind the account guard. Hosting rewrites to `index.html`.
-- Sheets API key: restricted to the Sheets API (and Hosting domains once the browser uses it).
+- Sheets API key for the CLI (`appliance-checks-sheets-cli`): restricted to the Sheets API. A browser import will need a separate key restricted to the Hosting domains, since Node's `fetch` sends no referrer and would fail a referrer-restricted key.
 
 ## Testing
 
