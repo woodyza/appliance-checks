@@ -53,6 +53,7 @@ Env files: `.env.development` is committed (emulator config). `.env.dev` / `.env
 - `make provision ENV=dev|prod PROJECT_ID=<id>` — creates or checks the Firebase project and its Firestore, Hosting, App Check/reCAPTCHA and Sheets API key, and writes `.env.<env>`; safe to re-run. See [`docs/infra-setup.md`](./docs/infra-setup.md).
 - `make deploy ENV=dev|prod` — builds and deploys Hosting + Firestore rules/indexes to that environment, behind an account confirmation prompt.
 - `make e2e [ENV=dev]` — Playwright, kept out of `make check`. No `ENV` (default): seeds then runs against the Firestore emulator and a local Vite server. `ENV=dev`: seeds and runs against deployed `dev`, using the `E2E_APPCHECK_DEBUG_TOKEN` from `.env.dev`. Requires `npx playwright install chromium` once.
+- `make e2e-report` — opens the HTML report from the last `make e2e` run, with a trace and screenshot for each failing spec.
 - `make apps-script-push` / `make apps-script-deploy` / `make apps-script-test-url` — the Apps Script app's clasp commands, run from `apps-script/`.
 
 Single test file: `npx vitest run <path>` for unit tests, or, for rules/CLI tests, run it through the emulator directly, e.g.:

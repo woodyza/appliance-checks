@@ -5,9 +5,12 @@ export default defineConfig({
   testDir: 'tests/e2e',
   fullyParallel: false,
   workers: 1,
+  reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: e2eBaseUrl(),
     viewport: { width: 390, height: 844 },
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
   },
   webServer:
     e2eEnv() === 'emulator'

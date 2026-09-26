@@ -1,7 +1,7 @@
 JAVA_HOME_21 ?= /opt/homebrew/opt/openjdk@21
 EMULATOR_PATH := $(JAVA_HOME_21)/bin:$(PATH)
 
-.PHONY: check lint typecheck test test-unit test-emulator dev provision deploy e2e \
+.PHONY: check lint typecheck test test-unit test-emulator dev provision deploy e2e e2e-report \
 	apps-script-push apps-script-deploy apps-script-test-url
 
 # Lint, typecheck and run the full test suite (unit + emulator).
@@ -48,6 +48,10 @@ e2e:
 		PATH="$(EMULATOR_PATH)" npx firebase emulators:exec --only firestore --project demo-appliance-checks \
 			"npm run e2e:seed -- --project emulator && npx playwright test"; \
 	fi
+
+# Opens the HTML report from the last `make e2e` run (traces and screenshots of any failures).
+e2e-report:
+	npx playwright show-report
 
 # Apps Script app in apps-script/ (clasp installed globally, see apps-script/README.md).
 apps-script-push:
