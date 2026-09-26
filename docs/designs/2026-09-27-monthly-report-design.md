@@ -6,7 +6,9 @@ The format follows `docs/March checks.pdf`, a real 5-Check month: one grid, Item
 
 ## Auth and rules
 
-- Firebase Auth email link. `src/firebase.ts` adds `getAuth`, connecting to the Auth emulator in local dev. `firebase.json` gets an `auth` emulator, and `make dev`, `make e2e` and the emulator scripts run `firestore,auth`.
+- Firebase Auth email link. `src/firebase.ts` adds `getAuth`, and in local dev calls `connectAuthEmulator(auth, 'http://127.0.0.1:9099')`. `.env.development` already has an `authDomain`.
+- `firebase.json` gets an `auth` emulator on port 9099. `make dev`, `make e2e` and the `emulators` script run `firestore,auth`. `test:emulator` stays `firestore` only, because the rules tests fake auth with `authenticatedContext`.
+- `resolveTarget('emulator')` in `cli/lib/target.ts` also sets `FIREBASE_AUTH_EMULATOR_HOST ??= '127.0.0.1:9099'`, as it does for Firestore, so the seeds can create Auth users.
 - `isSuperadmin()` is `request.auth != null && request.auth.uid == 'emulator-superadmin'`:
   - The committed rules hold the emulator's fixed UID, so `make dev` and the rules tests use the file as-is.
   - `make deploy` swaps in the environment's UID (see Deploy). This departs from the issue's "hardcoded in `firestore.rules`": each environment only trusts its own UID, and no UIDs end up in git.
@@ -18,10 +20,12 @@ The format follows `docs/March checks.pdf`, a real 5-Check month: one grid, Item
 
 ## UI and data flow
 
-Routes:
+Routes (views in `src/views/admin/`). The explicit `/admin` routes go before the slug routes. `admin` can't match the 6-char slug pattern anyway.
 
 - `/admin/sign-in`: enter an email, see "check your inbox", and complete the link on return.
-- `/admin`: pick a brigade (listed), an appliance and a month, then Download.
+- `/admin` (`ReportView.vue`): pick a brigade, an appliance and a month, then Download.
+  - Brigades: every brigade, sorted by name.
+  - Appliances: the existing `listAppliances`, which returns active ones only.
   - The month picker offers the current month and the 11 before it, defaulting to last month.
   - It has a sign-out link.
 - A `requiresAuth` guard waits for the first `onAuthStateChanged` result, then redirects signed-out users to sign-in.
@@ -35,11 +39,22 @@ Sign-in (`src/state/auth.ts`, `src/views/admin/SignIn.vue`):
 
 Loading a report:
 
+Months are `'YYYY-MM'` strings.
+
 1. Get the brigade (`checkDay`) and the appliance.
-2. List the appliance's Checks with `scheduledDate` in the month.
-3. Get each distinct Check Sheet version they use, plus the current one, via the existing in-memory cache.
+2. List the appliance's Checks in the month: `applianceId ==`, `scheduledDate >= first of month`, `scheduledDate < first of next month`, `orderBy('scheduledDate')`. The existing composite index covers it.
+3. Get each distinct Check Sheet version they use, plus the current one, via `getVersion` (already cached).
 4. The dates are the union of existing Checks and dates computed from the current `checkDay`. In the current month, computed dates stop at the current window's Check, so future Checks don't show as missing.
 5. Build the model, lazy-load the renderer, and download.
+
+New code:
+
+- `src/data/admin.ts`:
+  - `listBrigades()`, returning slug and brigade
+  - `listChecksInMonth(slug, applianceId, month)`
+
+  It reuses `getBrigade`, `getAppliance`, `listAppliances` and `getVersion` from `src/data/checks.ts`.
+- `src/domain/schedule.ts` gets `firstOfNextMonth(date)`.
 
 Known limitation: a mid-month Check Day change can add phantom 0% columns for the new weekday's earlier dates, because there's no Check Day history. Changes are rare, so this is accepted.
 
@@ -138,19 +153,24 @@ New idempotent `make provision` steps:
   - The existing anonymous cases are unchanged.
 - E2E runs on the emulator only. `ENV=dev` skips it, since there's no inbox a script can read.
   - `e2e-seed` additions:
-    - An Auth emulator user `emulator-superadmin` / `e2e-admin@example.com` (emulator only).
-    - A fixture `checkSheetVersions/2` with a v1-only and a v2-only Item.
-    - For `e2e1` in the previous month: a Complete Check on v1 and a partial one on v2, with the rest missing. The seed uses the Admin SDK, so the write window doesn't apply.
+    - An Auth emulator user `emulator-superadmin` / `e2e-admin@example.com` (emulator only). `dev-seed` creates the same user, so `make dev` can use the admin pages.
+    - A third appliance, `e2e3` ("E2E 3"). Its v1 and v2 are separate from `e2e1`/`e2e2`'s fixture, which the check entry specs depend on:
+      - v2 has a v1-only Item removed and a v2-only Item added.
+      - `currentCheckSheetVersion` is 2.
+      - Check that spec 5 ("switches appliance") doesn't assert exactly two appliances.
+    - For `e2e3`, on the previous month's first two Check Days: a Complete Check on v1, then a partial one on v2. The rest of the month stays missing.
+      - Both are past their windows, so they're Frozen even early in the month. The last Check of a month can still be in its window.
+      - The seed uses the Admin SDK, so the write window doesn't apply.
   - "downloads a Monthly Report":
     1. Request a link.
     2. Read it from the Auth emulator's `oobCodes` endpoint and open it.
-    3. Pick E2E Test Brigade, E2E 1 and the previous month, then Download.
-    4. Assert the file is named `E2E 1-YYYY-MM.pdf` and starts with `%PDF`. The content is covered by the unit tests.
+    3. Pick E2E Test Brigade, E2E 3 and the previous month, then Download.
+    4. Assert the file is named `E2E 3-YYYY-MM.pdf` and starts with `%PDF`. The content is covered by the unit tests.
   - "not authorised": another emulator user signs in and sees the message and their UID.
 - Manual, on `dev` (the done-when):
   1. Seed with `make e2e ENV=dev`, whose seed step creates the same previous-month data.
   2. Sign in with a real email, set `SUPERADMIN_UID`, and redeploy.
-  3. Download E2E 1 for the previous month. Check:
+  3. Download E2E 3 for the previous month. Check:
      - it has the mix of Complete, partial and missing Checks
      - the v1 Check shows the v1-only Item and not the v2-only one
   4. Compare by eye with the March PDF, using a real Mangawhai sheet, for widths and paging.
