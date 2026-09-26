@@ -1,6 +1,6 @@
 # Brigade Links are obscurity, not access control
 
-Running a Check needs no sign-in, because any login friction at the appliance means Checks get skipped. Each brigade instead gets a Brigade Link: a pseudo-random short slug, used almost entirely via the QR codes on its appliances. The slug is part of the Firestore document path, and anonymous list queries are denied, so one brigade can't stumble onto another's appliances. It isn't access control, though: anyone with the link can read and write that brigade's Checks. Editing Check Sheets, Monthly Reports and everything else require an authenticated Brigade Admin or VSO.
+Running a Check needs no sign-in, because any login friction at the appliance means Checks get skipped. Each brigade instead gets a Brigade Link: a pseudo-random short slug, used almost entirely via the QR codes on its appliances. The slug is part of the Firestore document path, and anonymous list queries are limited to one brigade's path (Checks also to a recent date range), so one brigade can't stumble onto another's appliances. It isn't access control, though: anyone with the link can read and write that brigade's Checks. Editing Check Sheets, Monthly Reports and everything else require an authenticated Brigade Admin or VSO.
 
 ## Consequences
 

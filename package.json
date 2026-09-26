@@ -9,11 +9,13 @@
     "typecheck": "vue-tsc --noEmit",
     "test:unit": "vitest run --project unit",
     "test:emulator": "firebase emulators:exec --only firestore --project demo-appliance-checks \"vitest run --project emulator\"",
-    "emulators": "firebase emulators:start --only firestore,hosting --project demo-appliance-checks",
+    "emulators": "firebase emulators:start --only firestore --project demo-appliance-checks --import=.emulator-data --export-on-exit=.emulator-data",
+    "dev:seed": "tsx cli/dev-seed.ts",
     "cli:create-brigade": "tsx cli/create-brigade.ts",
     "cli:add-appliance": "tsx cli/add-appliance.ts",
     "cli:import-check-sheet": "tsx cli/import-check-sheet.ts",
-    "cli:deploy": "tsx cli/deploy.ts"
+    "cli:deploy": "tsx cli/deploy.ts",
+    "e2e:seed": "tsx cli/e2e-seed.ts"
   },
   "dependencies": {
     "firebase": "^12.19.0",
@@ -23,8 +25,10 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@firebase/rules-unit-testing": "^5.0.2",
+    "@playwright/test": "^1.63.0",
     "@types/node": "^26.6.2",
     "@vitejs/plugin-vue": "^6.0.9",
+    "concurrently": "^10.0.5",
     "eslint": "^10.11.0",
     "eslint-plugin-vue": "^10.11.1",
     "firebase-admin": "^14.5.0",

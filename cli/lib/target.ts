@@ -53,7 +53,7 @@ async function activeAccountEmail(): Promise<string> {
 }
 
 export function hostingBaseUrl(target: ProjectTarget): string {
-  if (target === 'emulator') return 'http://127.0.0.1:5000'
+  if (target === 'emulator') return 'http://localhost:5173'
   return `https://${readProjectId(target)}.web.app`
 }
 

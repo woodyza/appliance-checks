@@ -36,16 +36,25 @@ make provision ENV=dev PROJECT_ID=<dev project id>
 make provision ENV=prod PROJECT_ID=<prod project id>
 ```
 
+After the first run the id comes from the `.firebaserc` alias, so re-runs are just `make provision ENV=dev`.
+
 For each project this creates, or checks and skips if it's already there:
 
 - the Google Cloud project with Firebase added
-- the Firestore, Firebase Rules, Firebase Hosting, Sheets and API Keys APIs
+- the Firestore, Firebase Rules, Firebase Hosting, App Check, reCAPTCHA Enterprise, Sheets and API Keys APIs
 - the `(default)` Firestore database, in `australia-southeast1` unless you pass `REGION=...` (a database's location can't be changed later)
 - the default Hosting site
+- a Firebase Web app (`appliance-checks-web`) and its SDK config
+- a reCAPTCHA Enterprise score key (`appliance-checks-web`, restricted to `<project>.web.app` and `<project>.firebaseapp.com`), registered as the app's App Check provider at a minimum score of 0.3 with a 1h token TTL
+- Firestore App Check enforcement, set to `enforced`
+- `dev` only: an App Check debug token (display name `appliance-checks-e2e`) for `make e2e ENV=dev`, reusing `E2E_APPCHECK_DEBUG_TOKEN` from an existing `.env.dev` if there is one
+- `.env.<env>` (the Firebase web config and reCAPTCHA site key; gitignored, like `.firebaserc` — the config contains the project id)
 - a Sheets API key named `appliance-checks-sheets-cli`, restricted to the Sheets API, for the CLI import (a browser import will need its own referrer-restricted key)
 - the environment's alias in `.firebaserc` (gitignored; on a new machine, re-running `make provision` recreates it)
 
 It's safe to re-run, e.g. after a step failed or a project was partly set up in the console. The key itself isn't printed; the script ends with the command to load it into your shell as `SHEETS_API_KEY`.
+
+App Check enforcement can take up to 15 minutes to take effect after `make provision` finishes, so wait before relying on it (e.g. before `make e2e ENV=dev` or checking the site in a browser).
 
 ## 4. Deploy and load data
 
@@ -61,6 +70,20 @@ Hosting sends `X-Robots-Tag: noindex, nofollow` and serves a `robots.txt` that d
 `make deploy` replaces Hosting content and Firestore rules. `firestore.indexes.json` is the source of truth for indexes, so if any were created in the console the deploy offers to delete them: answer No unless you mean it.
 
 The spreadsheet id is the long string in the sheet's URL (`/spreadsheets/d/<id>/edit`), and the sheet must be viewable by anyone with the link.
+
+## 5. E2E against dev
+
+```bash
+make e2e ENV=dev
+```
+
+Seeds the `e2etst` brigade against `dev` (Admin SDK, behind the account guard), then runs the Playwright specs against `https://<dev project id>.web.app` with the App Check debug token from `.env.dev` injected via `addInitScript`. Requires `make deploy ENV=dev` to have run first, and the enforcement wait above to have passed.
+
+What the first `dev` run showed (September 2026):
+
+- **reCAPTCHA Enterprise works on Spark.** Key creation and the App Check provider setup went through without a billing account, so there's no need for the `recaptcha-v3` fallback.
+- **App Check-rejected requests don't seem to count.** A batch of unattested REST reads all got 403s and didn't show up in the billable usage reports the next day, while the e2e and manual traffic did. So App Check looks like it protects the quota as well as the data (going by the usage reports; Google doesn't document it).
+- **The debug token works** for `make e2e ENV=dev`, and a real device on iOS Safari (iPad) passed App Check at the 0.3 minimum score.
 
 ## Moving to another Google account
 

@@ -1,7 +1,7 @@
 JAVA_HOME_21 ?= /opt/homebrew/opt/openjdk@21
 EMULATOR_PATH := $(JAVA_HOME_21)/bin:$(PATH)
 
-.PHONY: check lint typecheck test test-unit test-emulator dev provision deploy \
+.PHONY: check lint typecheck test test-unit test-emulator dev provision deploy e2e e2e-report \
 	apps-script-push apps-script-deploy apps-script-test-url
 
 # Lint, typecheck and run the full test suite (unit + emulator).
@@ -23,20 +23,38 @@ test-unit:
 test-emulator:
 	PATH="$(EMULATOR_PATH)" npm run test:emulator
 
-# Run these in two terminals (the emulators need Java 21+ on PATH, see test-emulator above):
-#   PATH="$(EMULATOR_PATH)" npm run emulators
-#   npm run dev
+# Firestore emulator (data kept in .emulator-data/ between runs), the dev seed and Vite, in one
+# terminal; Ctrl-C stops them all and the emulator exports its data on the way out.
 dev:
-	@echo 'Run in one terminal: PATH="$(EMULATOR_PATH)" npm run emulators'
-	@echo 'Run in another:      npm run dev'
+	PATH="$(EMULATOR_PATH)" npx concurrently --names emulator,seed,vite --prefix-colors blue,magenta,green \
+		--kill-others-on-fail "npm run emulators" "npm run dev:seed" "npm run dev"
 
-# make provision ENV=dev|prod PROJECT_ID=<id> [REGION=<region>]; see docs/infra-setup.md
+# make provision ENV=dev|prod [PROJECT_ID=<id>] [REGION=<region>]; PROJECT_ID defaults to the
+# .firebaserc alias for ENV, so it's only needed the first time. See docs/infra-setup.md.
 provision:
-	npx tsx cli/provision.ts --env $(ENV) --project-id $(PROJECT_ID) $(if $(REGION),--region $(REGION))
+	npx tsx cli/provision.ts --env $(ENV) $(if $(PROJECT_ID),--project-id $(PROJECT_ID)) $(if $(REGION),--region $(REGION))
 
 # make deploy ENV=dev|prod
 deploy:
 	npx tsx cli/deploy.ts --project $(ENV)
+
+# make e2e [ENV=dev] — Playwright, kept out of `check`. Default (no ENV) runs against the Firestore
+# emulator and Vite: a running `make dev` if there is one (the e2e seed only touches its own brigade),
+# otherwise a throwaway emulator. ENV=dev seeds and runs against the deployed dev site.
+e2e:
+	@if [ "$(ENV)" = "dev" ]; then \
+		npm run e2e:seed -- --project dev && \
+		E2E_ENV=dev npx playwright test; \
+	elif curl -s -o /dev/null http://127.0.0.1:8080; then \
+		npm run e2e:seed -- --project emulator && npx playwright test; \
+	else \
+		PATH="$(EMULATOR_PATH)" npx firebase emulators:exec --only firestore --project demo-appliance-checks \
+			"npm run e2e:seed -- --project emulator && npx playwright test"; \
+	fi
+
+# Opens the HTML report from the last `make e2e` run (traces and screenshots of any failures).
+e2e-report:
+	npx playwright show-report
 
 # Apps Script app in apps-script/ (clasp installed globally, see apps-script/README.md).
 apps-script-push:

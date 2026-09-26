@@ -5,7 +5,7 @@ import tseslint from 'typescript-eslint'
 import pluginVue from 'eslint-plugin-vue'
 
 export default defineConfig(
-  globalIgnores(['dist/**', 'apps-script/**', 'node_modules/**']),
+  globalIgnores(['dist/**', 'apps-script/**', 'node_modules/**', 'playwright-report/**', 'test-results/**']),
   eslint.configs.recommended,
   tseslint.configs.recommended,
   pluginVue.configs['flat/recommended'],
@@ -20,6 +20,9 @@ export default defineConfig(
   {
     rules: {
       'vue/multi-word-component-names': 'off',
+      // TypeScript already checks this, and the core rule false-positives on ambient DOM
+      // lib types (e.g. Event, HTMLSelectElement) used only in type positions inside .vue files.
+      'no-undef': 'off',
     },
   },
 )
