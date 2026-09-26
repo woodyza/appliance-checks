@@ -16,6 +16,10 @@ service cloud.firestore {
     return string(year) + '-' + pad2(month) + '-01';
   }
 
+  function isSuperadmin() {
+    return request.auth != null && request.auth.uid == 'emulator-superadmin';
+  }
+
   // `before` is the responses map prior to this write: {} on create, resource.data.responses on update.
   function validCheckWrite(checkId, before) {
     let data = request.resource.data;
@@ -42,6 +46,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
     match /brigades/{slug} {
       allow get: if true;
+      allow list: if isSuperadmin();
       allow write: if false;
 
       match /private/settings {
@@ -60,7 +65,7 @@ service cloud.firestore {
 
       match /checks/{checkId} {
         allow get: if true;
-        allow list: if resource.data.scheduledDate >= firstOfPreviousMonth();
+        allow list: if isSuperadmin() || resource.data.scheduledDate >= firstOfPreviousMonth();
         allow delete: if false;
 
         allow create: if validCheckWrite(checkId, {})
