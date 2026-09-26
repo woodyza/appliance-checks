@@ -23,12 +23,11 @@ test-unit:
 test-emulator:
 	PATH="$(EMULATOR_PATH)" npm run test:emulator
 
-# Run these in two terminals (the emulators need Java 21+ on PATH, see test-emulator above):
-#   PATH="$(EMULATOR_PATH)" npm run emulators
-#   npm run dev
+# Firestore emulator (data kept in .emulator-data/ between runs), the dev seed and Vite, in one
+# terminal; Ctrl-C stops them all and the emulator exports its data on the way out.
 dev:
-	@echo 'Run in one terminal: PATH="$(EMULATOR_PATH)" npm run emulators'
-	@echo 'Run in another:      npm run dev'
+	PATH="$(EMULATOR_PATH)" npx concurrently --names emulator,seed,vite --prefix-colors blue,magenta,green \
+		--kill-others-on-fail "npm run emulators" "npm run dev:seed" "npm run dev"
 
 # make provision ENV=dev|prod PROJECT_ID=<id> [REGION=<region>]; see docs/infra-setup.md
 provision:
@@ -38,12 +37,15 @@ provision:
 deploy:
 	npx tsx cli/deploy.ts --project $(ENV)
 
-# make e2e [ENV=dev] — Playwright, kept out of `check`. Default (no ENV) runs against the
-# Firestore emulator and Vite dev server; ENV=dev seeds and runs against the deployed dev site.
+# make e2e [ENV=dev] — Playwright, kept out of `check`. Default (no ENV) runs against the Firestore
+# emulator and Vite: a running `make dev` if there is one (the e2e seed only touches its own brigade),
+# otherwise a throwaway emulator. ENV=dev seeds and runs against the deployed dev site.
 e2e:
 	@if [ "$(ENV)" = "dev" ]; then \
 		npm run e2e:seed -- --project dev && \
 		E2E_ENV=dev npx playwright test; \
+	elif curl -s -o /dev/null http://127.0.0.1:8080; then \
+		npm run e2e:seed -- --project emulator && npx playwright test; \
 	else \
 		PATH="$(EMULATOR_PATH)" npx firebase emulators:exec --only firestore --project demo-appliance-checks \
 			"npm run e2e:seed -- --project emulator && npx playwright test"; \
