@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 import { addDays, currentCheckDate, today, weekday } from '../../src/domain/schedule'
-import { addAppCheckDebugToken, expect, test } from './fixtures'
+import { expect, openSecondPerson, test } from './fixtures'
 
 const TODAY = today()
 const CHECK_DAY = weekday(TODAY)
@@ -123,13 +123,9 @@ test('answers land on the selected Check', async ({ page }) => {
   await expect(radioRow.locator('.yn-btn.y-active')).not.toBeVisible()
 })
 
-test('two people answering different Items both keep their answers', async ({ browser }) => {
-  const contextA = await browser.newContext({ viewport: { width: 390, height: 844 } })
-  const contextB = await browser.newContext({ viewport: { width: 390, height: 844 } })
-  await addAppCheckDebugToken(contextA)
-  await addAppCheckDebugToken(contextB)
-  const pageA = await contextA.newPage()
-  const pageB = await contextB.newPage()
+test('two people answering different Items both keep their answers', async ({ page: pageA, browser }, testInfo) => {
+  const personB = await openSecondPerson(browser, testInfo)
+  const pageB = personB.page
 
   try {
     await Promise.all([pageA.goto('/e2etst/e2e1'), pageB.goto('/e2etst/e2e1')])
@@ -155,8 +151,7 @@ test('two people answering different Items both keep their answers', async ({ br
     await expect(itemRow(pageB, 'Helmet').locator('.yn-btn.n-active')).toBeVisible()
     await expect(itemRow(pageB, 'Radio').locator('.yn-btn.y-active')).toBeVisible()
   } finally {
-    await contextA.close()
-    await contextB.close()
+    await personB.close()
   }
 })
 
