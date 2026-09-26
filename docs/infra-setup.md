@@ -79,10 +79,11 @@ make e2e ENV=dev
 
 Seeds the `e2etst` brigade against `dev` (Admin SDK, behind the account guard), then runs the Playwright specs against `https://<dev project id>.web.app` with the App Check debug token from `.env.dev` injected via `addInitScript`. Requires `make deploy ENV=dev` to have run first, and the enforcement wait above to have passed.
 
-Two things to check the first time a `dev` project is provisioned and record here:
+What the first `dev` run showed (September 2026):
 
-- **Whether reCAPTCHA Enterprise's free tier works on Spark without a billing instrument.** The Google docs are inconsistent about this. If key creation or the App Check provider setup fails for a billing reason, the fallback is the `recaptcha-v3` provider instead (a small change in `provision.ts` and `src/firebase.ts`).
-- **Whether App Check-rejected requests are billed or count against the Spark quota.** Undocumented. To check: script a batch of unattested REST reads against the `dev` project's Firestore (no App Check token), then compare the usage dashboard the next day against a quiet baseline. If they do count, App Check protects the data but not the quota.
+- **reCAPTCHA Enterprise works on Spark.** Key creation and the App Check provider setup went through without a billing account, so there's no need for the `recaptcha-v3` fallback.
+- **App Check-rejected requests don't seem to count.** A batch of unattested REST reads all got 403s and didn't show up in the billable usage reports the next day, while the e2e and manual traffic did. So App Check looks like it protects the quota as well as the data (going by the usage reports; Google doesn't document it).
+- **The debug token works** for `make e2e ENV=dev`, and a real device on iOS Safari (iPad) passed App Check at the 0.3 minimum score.
 
 ## Moving to another Google account
 
