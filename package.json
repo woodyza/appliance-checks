@@ -13,7 +13,8 @@
     "cli:create-brigade": "tsx cli/create-brigade.ts",
     "cli:add-appliance": "tsx cli/add-appliance.ts",
     "cli:import-check-sheet": "tsx cli/import-check-sheet.ts",
-    "cli:deploy": "tsx cli/deploy.ts"
+    "cli:deploy": "tsx cli/deploy.ts",
+    "e2e:seed": "tsx cli/e2e-seed.ts"
   },
   "dependencies": {
     "firebase": "^12.19.0",
@@ -23,6 +24,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@firebase/rules-unit-testing": "^5.0.2",
+    "@playwright/test": "^1.63.0",
     "@types/node": "^26.6.2",
     "@vitejs/plugin-vue": "^6.0.9",
     "eslint": "^10.11.0",

@@ -1,5 +1,8 @@
+import { randomUUID } from 'node:crypto'
+import { writeFileSync } from 'node:fs'
 import { parseArgs } from 'node:util'
 import { assertNoFirebaseToken, firebaseCliAccount, gcloudAccount } from './lib/accounts'
+import { readEnvFile, renderEnvFile } from './lib/envFile'
 import { type Firebaserc, readFirebaserc, withAlias, writeFirebaserc } from './lib/firebaserc'
 import { hasRandomSuffix } from './lib/projectId'
 import { confirm } from './lib/prompt'
@@ -12,8 +15,13 @@ const SERVICES = [
   'firebasehosting.googleapis.com',
   'sheets.googleapis.com',
   'apikeys.googleapis.com',
+  'firebaseappcheck.googleapis.com',
+  'recaptchaenterprise.googleapis.com',
 ]
 const SHEETS_KEY_NAME = 'appliance-checks-sheets-cli'
+const WEB_APP_NAME = 'appliance-checks-web'
+const RECAPTCHA_KEY_NAME = 'appliance-checks-web'
+const RECAPTCHA_MIN_SCORE = '0.3'
 const PROJECT_ID_PATTERN = /^[a-z][a-z0-9-]{4,28}[a-z0-9]$/
 
 interface HostingSite {
@@ -122,6 +130,130 @@ function ensureSheetsKey(projectId: string): string {
   return created
 }
 
+interface FirebaseApp {
+  appId: string
+  displayName?: string
+}
+
+function ensureWebApp(projectId: string): string {
+  step(`Web app "${WEB_APP_NAME}"`)
+  const listed = capture('npx', ['firebase', 'apps:list', 'WEB', '--project', projectId, '--non-interactive', '--json'])
+  if (!listed.ok) throw new Error(`Could not list Firebase web apps: ${listed.stderr || listed.stdout}`)
+  const apps = (JSON.parse(listed.stdout) as { result?: FirebaseApp[] }).result ?? []
+  const existing = apps.find((app) => app.displayName === WEB_APP_NAME)
+  if (existing) {
+    console.log(`  already exists: ${existing.appId}`)
+    return existing.appId
+  }
+
+  const created = capture('npx', [
+    'firebase', 'apps:create', 'WEB', WEB_APP_NAME,
+    '--project', projectId, '--non-interactive', '--json',
+  ])
+  if (!created.ok) throw new Error(`Could not create the Firebase web app: ${created.stderr || created.stdout}`)
+  const appId = (JSON.parse(created.stdout) as { result?: { appId: string } }).result?.appId
+  if (!appId) throw new Error('Created the Firebase web app but its app id was missing from the response.')
+  return appId
+}
+
+interface WebSdkConfig {
+  projectId: string
+  appId: string
+  apiKey: string
+  authDomain: string
+}
+
+function webConfig(projectId: string, appId: string): WebSdkConfig {
+  step('Web app SDK config')
+  const result = capture('npx', [
+    'firebase', 'apps:sdkconfig', 'WEB', appId,
+    '--project', projectId, '--non-interactive', '--json',
+  ])
+  if (!result.ok) throw new Error(`Could not fetch the web app SDK config: ${result.stderr || result.stdout}`)
+  const sdkConfig = (JSON.parse(result.stdout) as { result?: { sdkConfig?: WebSdkConfig } }).result?.sdkConfig
+  if (!sdkConfig) throw new Error('Could not find sdkConfig in the apps:sdkconfig output.')
+  return sdkConfig
+}
+
+interface RecaptchaKey {
+  name: string
+  displayName?: string
+}
+
+function ensureRecaptchaKey(projectId: string): string {
+  step(`reCAPTCHA Enterprise key "${RECAPTCHA_KEY_NAME}"`)
+  const listed = capture('gcloud', ['recaptcha', 'keys', 'list', `--project=${projectId}`, '--format=json'])
+  if (!listed.ok) throw new Error(`Could not list reCAPTCHA Enterprise keys: ${listed.stderr}`)
+  const keys = JSON.parse(listed.stdout) as RecaptchaKey[]
+  const existing = keys.find((key) => key.displayName === RECAPTCHA_KEY_NAME)
+  if (existing) {
+    const siteKey = existing.name.split('/').pop()
+    if (!siteKey) throw new Error(`Could not parse a site key out of "${existing.name}".`)
+    console.log(`  already exists: ${siteKey}`)
+    return siteKey
+  }
+
+  const domains = `${projectId}.web.app,${projectId}.firebaseapp.com`
+  const created = capture('gcloud', [
+    'recaptcha', 'keys', 'create',
+    `--project=${projectId}`, `--display-name=${RECAPTCHA_KEY_NAME}`,
+    '--web', `--domains=${domains}`, '--integration-type=score', '--format=json',
+  ])
+  if (!created.ok) throw new Error(`Could not create the reCAPTCHA Enterprise key: ${created.stderr}`)
+  const name = (JSON.parse(created.stdout) as RecaptchaKey).name
+  const siteKey = name.split('/').pop()
+  if (!siteKey) throw new Error(`Could not parse a site key out of "${name}".`)
+  return siteKey
+}
+
+function setAppCheckProvider(projectId: string, appId: string, siteKey: string): void {
+  step('App Check provider: reCAPTCHA Enterprise')
+  run('npx', [
+    'firebase', 'appcheck:providers:set', 'recaptcha-enterprise',
+    '--app', appId, '--site-key', siteKey, '--min-score', RECAPTCHA_MIN_SCORE, '--token-ttl', '1h',
+    '--project', projectId, '--non-interactive',
+  ])
+}
+
+function enforceFirestore(projectId: string): void {
+  step('App Check enforcement: Firestore')
+  run('npx', [
+    'firebase', 'appcheck:services:set', 'firestore', 'enforced',
+    '--force', '--project', projectId, '--non-interactive',
+  ])
+}
+
+function ensureDebugToken(env: string, projectId: string, appId: string): string | null {
+  if (env !== 'dev') return null
+  step('App Check debug token (dev only, for e2e)')
+  const existing = readEnvFile(`.env.${env}`)
+  const token = existing?.E2E_APPCHECK_DEBUG_TOKEN ?? randomUUID()
+  // --json (captured, not streamed to the terminal) so the token itself never lands in scrollback.
+  const created = capture('npx', [
+    'firebase', 'appcheck:debugtokens:create', token,
+    '--app', appId, '--display-name', 'appliance-checks-e2e', '--force',
+    '--project', projectId, '--non-interactive', '--json',
+  ])
+  if (!created.ok) throw new Error(`Could not create the App Check debug token: ${created.stderr}`)
+  console.log('  created (kept out of scrollback; written to .env.dev)')
+  return token
+}
+
+function writeEnvValues(env: string, config: WebSdkConfig, siteKey: string, debugToken: string | null): void {
+  step(`.env.${env}`)
+  const values: Record<string, string> = {
+    VITE_USE_EMULATOR: 'false',
+    VITE_FIREBASE_API_KEY: config.apiKey,
+    VITE_FIREBASE_AUTH_DOMAIN: config.authDomain,
+    VITE_FIREBASE_PROJECT_ID: config.projectId,
+    VITE_FIREBASE_APP_ID: config.appId,
+    VITE_RECAPTCHA_SITE_KEY: siteKey,
+  }
+  if (debugToken) values.E2E_APPCHECK_DEBUG_TOKEN = debugToken
+  writeFileSync(`.env.${env}`, renderEnvFile(values))
+  console.log('  written (it is gitignored)')
+}
+
 function writeAlias(env: string, updated: Firebaserc | null): void {
   step(`.firebaserc alias "${env}"`)
   if (updated === null) {
@@ -173,11 +305,19 @@ async function main(): Promise<void> {
   ensureServices(projectId)
   ensureFirestore(projectId, region)
   ensureHosting(projectId)
+  const appId = ensureWebApp(projectId)
+  const config = webConfig(projectId, appId)
+  const siteKey = ensureRecaptchaKey(projectId)
+  setAppCheckProvider(projectId, appId, siteKey)
+  enforceFirestore(projectId)
+  const debugToken = ensureDebugToken(env, projectId, appId)
+  writeEnvValues(env, config, siteKey, debugToken)
   const keyName = ensureSheetsKey(projectId)
   writeAlias(env, aliasUpdate)
 
   console.log('\nDone. To use the Sheets API key in this shell:')
   console.log(`  export SHEETS_API_KEY=$(gcloud services api-keys get-key-string ${keyName} --format='value(keyString)')`)
+  console.log('\nNote: App Check Firestore enforcement can take up to 15 minutes to take effect.')
 }
 
 main().catch((error: unknown) => {

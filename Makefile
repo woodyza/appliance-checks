@@ -1,7 +1,7 @@
 JAVA_HOME_21 ?= /opt/homebrew/opt/openjdk@21
 EMULATOR_PATH := $(JAVA_HOME_21)/bin:$(PATH)
 
-.PHONY: check lint typecheck test test-unit test-emulator dev provision deploy \
+.PHONY: check lint typecheck test test-unit test-emulator dev provision deploy e2e \
 	apps-script-push apps-script-deploy apps-script-test-url
 
 # Lint, typecheck and run the full test suite (unit + emulator).
@@ -37,6 +37,17 @@ provision:
 # make deploy ENV=dev|prod
 deploy:
 	npx tsx cli/deploy.ts --project $(ENV)
+
+# make e2e [ENV=dev] — Playwright, kept out of `check`. Default (no ENV) runs against the
+# Firestore emulator and Vite dev server; ENV=dev seeds and runs against the deployed dev site.
+e2e:
+	@if [ "$(ENV)" = "dev" ]; then \
+		npm run e2e:seed -- --project dev && \
+		E2E_ENV=dev npx playwright test; \
+	else \
+		PATH="$(EMULATOR_PATH)" npx firebase emulators:exec --only firestore --project demo-appliance-checks \
+			"npm run e2e:seed -- --project emulator && npx playwright test"; \
+	fi
 
 # Apps Script app in apps-script/ (clasp installed globally, see apps-script/README.md).
 apps-script-push:

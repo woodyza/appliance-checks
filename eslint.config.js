@@ -20,6 +20,9 @@ export default defineConfig(
   {
     rules: {
       'vue/multi-word-component-names': 'off',
+      // TypeScript already checks this, and the core rule false-positives on ambient DOM
+      // lib types (e.g. Event, HTMLSelectElement) used only in type positions inside .vue files.
+      'no-undef': 'off',
     },
   },
 )
