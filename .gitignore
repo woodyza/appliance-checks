@@ -8,6 +8,8 @@ dist
 .firebase/
 .envrc
 .firebaserc
+.deploy/
+firebase.deploy.json
 test-results/
 playwright-report/
 .emulator-data/

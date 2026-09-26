@@ -17,6 +17,22 @@ Design: `docs/designs/2026-09-27-monthly-report-design.md`. Two phases: phase 1 
 - **jsPDF 4.2.1 and jspdf-autotable 5.0.8** (peer `jspdf ^2 || ^3 || ^4`) are the current releases.
 - **The plan is committed**, as `check-entry.md` and `foundations.md` were: AGENTS.md makes it part of each slice.
 - **Not run by the implementer**: `make provision`, `make deploy` and `make e2e ENV=dev` against real projects (outward-facing, need the user's accounts). Handed back, as in #5.
+- **Phase 2, found while implementing:**
+  - **`adminAuth()` in `cli/lib/target.ts`** reads `getAuth(getApps()[0])` rather than a parallel `resolveAuth`/confirm path: `resolveTarget` already initialises the one Admin app and sets/deletes `FIREBASE_AUTH_EMULATOR_HOST`, so `e2e-seed.ts`/`dev-seed.ts` just call `adminAuth()` straight after `resolveTarget`, with one account-confirm prompt for both Firestore and Auth.
+  - **e2e3's appliance and its two Check Sheet versions are written by `writeVersionedAppliance` in `seed.ts`**, which overwrites like `writeBrigade` does. The implementer first used `cli/lib/store.ts`'s `addAppliance`/`writeVersion`, but those refuse an existing appliance, so a second `make e2e` against a running `make dev` (or any re-run of `make e2e ENV=dev`) failed; caught in the diff check. `writePreviousCheck` is refactored onto a new general `writeCheck(db, slug, applianceId, scheduledDate, checkSheetVersion, responses)`, reused for e2e3's two previous-month Checks.
+  - **`EMULATOR_SUPERADMIN_UID` is exported from `cli/lib/rules.ts`** (`firestore.rules`'s literal, `'emulator-superadmin'`) and reused by `ensureSuperadminUser` in `seed.ts`, so the fixed UID lives in one place instead of two.
+  - **`dev-seed.ts`'s emulator wait now polls both the Firestore (8080) and Auth (9099) emulator ports** before seeding, since `ensureSuperadminUser` needs Auth to answer.
+  - **jspdf-autotable's `head`/`foot` are a single date+version row and a status row**; each Section's own "Qty | Y N | Y N…" row (design) is a grey row in the table `body`, repeating once per Section rather than per page, since only `head`/`foot` repeat across pages.
+  - **PDF layout**: the e2e report was rendered to PNG and checked by eye (grid, n/a, not-due shading, % row, version labels). The side-by-side comparison with a real Mangawhai month and the March PDF is still the user's manual step.
+  - **The % row is the table's `foot`, shown on the last page only** (`showFoot: 'lastPage'`), like March's single summary row.
+- **After the diff check and final review:**
+  - **Pair width is always the space left over divided by the number of Checks** (about 21mm for 5, as in March), with no minimum, so a 6-column month after a Check Day change narrows rather than running off the page.
+  - **Head and foot are greyscale**, not autotable's default teal, since the report gets printed.
+  - **Macrons fall back to the base letter in the PDF** (Taupō → Taupo): jsPDF's built-in Helvetica only covers WinAnsi and otherwise drops them ("Whakatāne" → "Whakatne"). Embedding a Unicode TTF subset in the lazy chunk would render them properly; left as a follow-up.
+  - **Sign-in recovers from a bad link**: the error screen has "Request another link", the stored email is cleared on a failed completion, and `auth/invalid-email` (a later request on the same device overwrote the stored email) asks for the email instead.
+  - **An appliance-load failure toasts** rather than replacing the picker, and Download failures are logged to the console before the toast.
+  - **`CONFIGURATION_NOT_FOUND` from the Email provider PATCH** is rethrown with the "click Get started in the console" hint.
+  - **Issue #2's "Superadmin setup" line isn't edited** (outward-facing); the replacement text is handed to the user.
 
 ## Phase 1: report model, rules and UID substitution
 
@@ -83,28 +99,28 @@ None in this phase.
 
 ### Tasks
 
-- [ ] 2.1 Emulator wiring:
+- [x] 2.1 Emulator wiring:
   - `firebase.json`: `emulators.auth.port: 9099`.
   - `package.json` `emulators` script: `--only firestore,auth`. `test:emulator` unchanged.
   - `Makefile` `e2e` throwaway emulator: `--only firestore,auth`. The "running `make dev`" probe stays on 8080.
   - `cli/lib/target.ts` `resolveTarget('emulator')`: `process.env.FIREBASE_AUTH_EMULATOR_HOST ??= '127.0.0.1:9099'`; `dev`/`prod` delete it, as they do for Firestore.
-- [ ] 2.2 `src/firebase.ts`: export `auth = getAuth(app)`; `connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })` when `useEmulator`.
-- [ ] 2.3 `src/state/auth.ts`: `authReady()` (promise resolving with the user after the first `onAuthStateChanged`), `currentUser` ref, `sendLink(email)` (stores the email in `localStorage` under one key, `url: <origin>/admin/sign-in`, `handleCodeInApp: true`), `isSignInLink(url)`, `completeSignIn(email, url)` (clears the stored email), `storedEmail()`, `signOut()`. Map `auth/invalid-action-code`, `auth/expired-action-code` and `auth/quota-exceeded` to the design's messages.
-- [ ] 2.4 `src/data/admin.ts`: `listBrigades()` → `{ slug, brigade }[]` sorted by name; `listChecksInMonth(slug, applianceId, month)` using `firstOfMonth`/`firstOfNextMonth` (`>=`, `<`, `orderBy('scheduledDate')`).
-- [ ] 2.5 `src/router.ts`: `/admin/sign-in` → `SignIn.vue`, `/admin` → `ReportView.vue` with `meta.requiresAuth`, both before the slug routes; a `beforeEach` that awaits `authReady()` for `requiresAuth` routes and redirects to `/admin/sign-in` when signed out. `src/views/Landing.vue`: an "Admin sign-in" link.
-- [ ] 2.6 `src/views/admin/SignIn.vue`: email form → "check your inbox"; on mount, if the URL is a sign-in link, complete it with the stored email or ask for it; then `router.replace('/admin')`. Errors per the design's table.
-- [ ] 2.7 `src/views/admin/ReportView.vue`: loads brigades (`permission-denied` → "Not authorised" plus the UID); brigade, appliance (`listAppliances`) and month (`recentMonths(today(), 12)`, default the second entry) selects; "No Check Sheet yet" with Download disabled when `currentCheckSheetVersion` is null; Download runs the design's load steps, `buildMonthlyReport`, then `await import('../../report/pdf')`; a read failure shows the "Couldn't load the report" toast and leaves Download enabled; sign-out link. Reuses the existing screen, card and toast classes in `src/style.css`; add only what's missing.
-- [ ] 2.8 `src/report/pdf.ts`: `downloadMonthlyReport(report, generatedAt)` with jsPDF + jspdf-autotable per the design's PDF section (A4 portrait, 10mm margins, 7pt, label ~70mm, qty 14mm, pairs share the rest, header rows repeated, grey Section rows, cell rendering, % footer row with "Complete"/"not started", "Generated dd/MM/yy HH:mm" line, `<callsign>-<YYYY-MM>.pdf`). `npm install jspdf jspdf-autotable`.
-- [ ] 2.9 `cli/deploy.ts`: read `SUPERADMIN_UID` from `.env.<env>`; warn (design's text) if unset; write `.deploy/firestore.rules` via `substituteSuperadmin` and `firebase.deploy.json` (copy of `firebase.json` with the rules path swapped); deploy with `--config firebase.deploy.json`. `.gitignore`: `.deploy/`, `firebase.deploy.json`.
-- [ ] 2.10 `cli/provision.ts`: add `identitytoolkit.googleapis.com` to `SERVICES`; generalise `appCheckPatch` into a REST PATCH helper taking a full URL; `enableEmailLinkSignIn` (Decisions); `enforceAuth` (warn and continue on failure); `writeEnvValues` keeps an existing `SUPERADMIN_UID`, like the debug token.
-- [ ] 2.11 Seeds (`cli/lib/seed.ts`, `cli/e2e-seed.ts`, `cli/dev-seed.ts`):
+- [x] 2.2 `src/firebase.ts`: export `auth = getAuth(app)`; `connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })` when `useEmulator`.
+- [x] 2.3 `src/state/auth.ts`: `authReady()` (promise resolving with the user after the first `onAuthStateChanged`), `currentUser` ref, `sendLink(email)` (stores the email in `localStorage` under one key, `url: <origin>/admin/sign-in`, `handleCodeInApp: true`), `isSignInLink(url)`, `completeSignIn(email, url)` (clears the stored email), `storedEmail()`, `signOut()`. Map `auth/invalid-action-code`, `auth/expired-action-code` and `auth/quota-exceeded` to the design's messages.
+- [x] 2.4 `src/data/admin.ts`: `listBrigades()` → `{ slug, brigade }[]` sorted by name; `listChecksInMonth(slug, applianceId, month)` using `firstOfMonth`/`firstOfNextMonth` (`>=`, `<`, `orderBy('scheduledDate')`).
+- [x] 2.5 `src/router.ts`: `/admin/sign-in` → `SignIn.vue`, `/admin` → `ReportView.vue` with `meta.requiresAuth`, both before the slug routes; a `beforeEach` that awaits `authReady()` for `requiresAuth` routes and redirects to `/admin/sign-in` when signed out. `src/views/Landing.vue`: an "Admin sign-in" link.
+- [x] 2.6 `src/views/admin/SignIn.vue`: email form → "check your inbox"; on mount, if the URL is a sign-in link, complete it with the stored email or ask for it; then `router.replace('/admin')`. Errors per the design's table.
+- [x] 2.7 `src/views/admin/ReportView.vue`: loads brigades (`permission-denied` → "Not authorised" plus the UID); brigade, appliance (`listAppliances`) and month (`recentMonths(today(), 12)`, default the second entry) selects; "No Check Sheet yet" with Download disabled when `currentCheckSheetVersion` is null; Download runs the design's load steps, `buildMonthlyReport`, then `await import('../../report/pdf')`; a read failure shows the "Couldn't load the report" toast and leaves Download enabled; sign-out link. Reuses the existing screen, card and toast classes in `src/style.css`; add only what's missing.
+- [x] 2.8 `src/report/pdf.ts`: `downloadMonthlyReport(report, generatedAt)` with jsPDF + jspdf-autotable per the design's PDF section (A4 portrait, 10mm margins, 7pt, label ~70mm, qty 14mm, pairs share the rest, header rows repeated, grey Section rows, cell rendering, % footer row with "Complete"/"not started", "Generated dd/MM/yy HH:mm" line, `<callsign>-<YYYY-MM>.pdf`). `npm install jspdf jspdf-autotable`.
+- [x] 2.9 `cli/deploy.ts`: read `SUPERADMIN_UID` from `.env.<env>`; warn (design's text) if unset; write `.deploy/firestore.rules` via `substituteSuperadmin` and `firebase.deploy.json` (copy of `firebase.json` with the rules path swapped); deploy with `--config firebase.deploy.json`. `.gitignore`: `.deploy/`, `firebase.deploy.json`.
+- [x] 2.10 `cli/provision.ts`: add `identitytoolkit.googleapis.com` to `SERVICES`; generalise `appCheckPatch` into a REST PATCH helper taking a full URL; `enableEmailLinkSignIn` (Decisions); `enforceAuth` (warn and continue on failure); `writeEnvValues` keeps an existing `SUPERADMIN_UID`, like the debug token.
+- [x] 2.11 Seeds (`cli/lib/seed.ts`, `cli/e2e-seed.ts`, `cli/dev-seed.ts`):
   - `ensureSuperadminUser(auth)`: Admin SDK `createUser({ uid: 'emulator-superadmin', email: 'e2e-admin@example.com' })`, skipping if it exists. Emulator only: `e2e-seed` calls it only for `--project emulator`; `dev-seed` always.
   - e2e3 ("E2E 3"): its own v1/v2 fixture (v2 drops a v1-only Item and adds a v2-only one), `currentCheckSheetVersion: 2`; on the previous month's first two Check Days, a Complete Check on v1 then a partial Check on v2.
   - A helper returning the Admin `Auth` for the emulator target alongside Firestore (`resolveTarget` stays Firestore-returning; add `resolveAuth` or return both, whichever keeps callers simplest).
-- [ ] 2.12 `tests/e2e/monthlyReport.spec.ts` (skipped when `e2eEnv() === 'dev'`):
+- [x] 2.12 `tests/e2e/monthlyReport.spec.ts` (skipped when `e2eEnv() === 'dev'`):
   - "downloads a Monthly Report": request a link for `e2e-admin@example.com`, read the newest `oobLink` for that email from the oobCodes endpoint, open it, pick E2E Test Brigade / E2E 3 / previous month, Download; assert the suggested file name `E2E 3-YYYY-MM.pdf` and that the file starts with `%PDF`.
   - "not authorised": sign in as another email (the link creates the user), see "Not authorised" and a UID.
-- [ ] 2.13 Docs: `README.md` (admin sign-in, `/admin` routes); `docs/infra-setup.md` (Auth provisioning steps, `SUPERADMIN_UID` bootstrap, the Spark 5 emails a day limit, Auth App Check outcome as TBC until the manual run); #2's "Superadmin setup" line (`gh issue edit 2` after checking its body).
+- [x] 2.13 Docs: `README.md` (admin sign-in, `/admin` routes); `docs/infra-setup.md` (Auth provisioning steps, `SUPERADMIN_UID` bootstrap, the Spark 5 emails a day limit, Auth App Check outcome as TBC until the manual run); #2's "Superadmin setup" line (`gh issue edit 2` after checking its body).
 
 ### Test cases
 

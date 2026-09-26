@@ -1,4 +1,5 @@
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app'
+import { type Auth, getAuth } from 'firebase-admin/auth'
 import { getFirestore, type Firestore } from 'firebase-admin/firestore'
 import { GoogleAuth } from 'google-auth-library'
 import { readFirebaserc } from './firebaserc'
@@ -8,6 +9,7 @@ export type ProjectTarget = 'dev' | 'prod' | 'emulator'
 
 const EMULATOR_PROJECT_ID = 'demo-appliance-checks'
 const DEFAULT_EMULATOR_HOST = '127.0.0.1:8080'
+const DEFAULT_AUTH_EMULATOR_HOST = '127.0.0.1:9099'
 
 export function parseProjectTarget(value: string | undefined): ProjectTarget {
   if (value === undefined || value === 'emulator') return 'emulator'
@@ -60,13 +62,15 @@ export function hostingBaseUrl(target: ProjectTarget): string {
 export async function resolveTarget(target: ProjectTarget): Promise<Firestore> {
   if (target === 'emulator') {
     process.env.FIRESTORE_EMULATOR_HOST ??= DEFAULT_EMULATOR_HOST
+    process.env.FIREBASE_AUTH_EMULATOR_HOST ??= DEFAULT_AUTH_EMULATOR_HOST
     const app = getApps()[0] ?? initializeApp({ projectId: EMULATOR_PROJECT_ID })
     return getFirestore(app)
   }
 
-  // A leftover FIRESTORE_EMULATOR_HOST from another shell session must not silently redirect a
+  // Leftover *_EMULATOR_HOST vars from another shell session must not silently redirect a
   // dev/prod run at the emulator instead.
   delete process.env.FIRESTORE_EMULATOR_HOST
+  delete process.env.FIREBASE_AUTH_EMULATOR_HOST
 
   const projectId = readProjectId(target)
   const email = await activeAccountEmail()
@@ -76,4 +80,11 @@ export async function resolveTarget(target: ProjectTarget): Promise<Firestore> {
 
   const app = getApps()[0] ?? initializeApp({ credential: applicationDefault(), projectId })
   return getFirestore(app)
+}
+
+/** The Admin Auth for whichever app `resolveTarget` initialised; call that first. */
+export function adminAuth(): Auth {
+  const app = getApps()[0]
+  if (!app) throw new Error('resolveTarget must be called before adminAuth.')
+  return getAuth(app)
 }

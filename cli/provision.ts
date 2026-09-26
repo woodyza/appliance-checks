@@ -17,6 +17,7 @@ const SERVICES = [
   'apikeys.googleapis.com',
   'firebaseappcheck.googleapis.com',
   'recaptchaenterprise.googleapis.com',
+  'identitytoolkit.googleapis.com',
 ]
 const SHEETS_KEY_NAME = 'appliance-checks-sheets-cli'
 const WEB_APP_NAME = 'appliance-checks-web'
@@ -207,14 +208,16 @@ function ensureRecaptchaKey(projectId: string): string {
 }
 
 const APP_CHECK_API = 'https://firebaseappcheck.googleapis.com/v1'
+const IDENTITY_TOOLKIT_API = 'https://identitytoolkit.googleapis.com'
 
-// The provider and enforcement commands in firebase-tools are behind its `appcheckadmin` preview
-// experiment, so these call the App Check v1 API directly, as firebase-tools does.
-async function appCheckPatch(projectId: string, path: string, body: object, updateMask: string[]): Promise<void> {
+// The App Check provider/enforcement commands in firebase-tools are behind its `appcheckadmin`
+// preview experiment, and no firebase-tools command enables the Auth Email provider, so these
+// call the REST APIs directly, as firebase-tools itself does for App Check.
+async function restPatch(projectId: string, url: string, body: object, updateMask: string[]): Promise<void> {
   const token = capture('gcloud', ['auth', 'print-access-token'])
   if (!token.ok) throw new Error(`Could not get a gcloud access token: ${token.stderr}`)
-  const url = `${APP_CHECK_API}/${path}?updateMask=${updateMask.join(',')}`
-  const response = await fetch(url, {
+  const patchUrl = `${url}?updateMask=${updateMask.join(',')}`
+  const response = await fetch(patchUrl, {
     method: 'PATCH',
     headers: {
       Authorization: `Bearer ${token.stdout}`,
@@ -223,7 +226,7 @@ async function appCheckPatch(projectId: string, path: string, body: object, upda
     },
     body: JSON.stringify(body),
   })
-  if (!response.ok) throw new Error(`PATCH ${path} failed (${String(response.status)}): ${await response.text()}`)
+  if (!response.ok) throw new Error(`PATCH ${url} failed (${String(response.status)}): ${await response.text()}`)
 }
 
 function projectNumber(projectId: string): string {
@@ -234,9 +237,9 @@ function projectNumber(projectId: string): string {
 
 async function setAppCheckProvider(projectId: string, number: string, appId: string, siteKey: string): Promise<void> {
   step('App Check provider: reCAPTCHA Enterprise')
-  await appCheckPatch(
+  await restPatch(
     projectId,
-    `projects/${number}/apps/${appId}/recaptchaEnterpriseConfig`,
+    `${APP_CHECK_API}/projects/${number}/apps/${appId}/recaptchaEnterpriseConfig`,
     { siteKey, tokenTtl: '3600s', riskAnalysis: { minValidScore: RECAPTCHA_MIN_SCORE } },
     ['siteKey', 'tokenTtl', 'riskAnalysis.minValidScore'],
   )
@@ -244,12 +247,49 @@ async function setAppCheckProvider(projectId: string, number: string, appId: str
 
 async function enforceFirestore(projectId: string, number: string): Promise<void> {
   step('App Check enforcement: Firestore')
-  await appCheckPatch(
+  await restPatch(
     projectId,
-    `projects/${number}/services/firestore.googleapis.com`,
+    `${APP_CHECK_API}/projects/${number}/services/firestore.googleapis.com`,
     { enforcementMode: 'ENFORCED' },
     ['enforcementMode'],
   )
+}
+
+async function enableEmailLinkSignIn(projectId: string): Promise<void> {
+  step('Auth Email provider (passwordless)')
+  try {
+    await restPatch(
+      projectId,
+      `${IDENTITY_TOOLKIT_API}/admin/v2/projects/${projectId}/config`,
+      { signIn: { email: { enabled: true, passwordRequired: false } } },
+      ['signIn.email.enabled', 'signIn.email.passwordRequired'],
+    )
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (!message.includes('CONFIGURATION_NOT_FOUND')) throw error
+    throw new Error(
+      `${message}\nAuth hasn't been started on this project: click "Get started" under Authentication in the ` +
+        'Firebase console once, then re-run.',
+      { cause: error },
+    )
+  }
+}
+
+// Needs the Identity Platform upgrade or billing on some projects (TBC); warn and carry on
+// rather than failing the rest of provisioning, and record the outcome in docs/infra-setup.md.
+async function enforceAuth(projectId: string, number: string): Promise<void> {
+  step('App Check enforcement: Auth')
+  try {
+    await restPatch(
+      projectId,
+      `${APP_CHECK_API}/projects/${number}/services/identitytoolkit.googleapis.com`,
+      { enforcementMode: 'ENFORCED' },
+      ['enforcementMode'],
+    )
+  } catch (error) {
+    console.log(`  warning: could not enforce App Check on Auth: ${error instanceof Error ? error.message : String(error)}`)
+    console.log('  continuing without it; see docs/infra-setup.md')
+  }
 }
 
 function ensureDebugToken(env: string, projectId: string, appId: string): string | null {
@@ -279,6 +319,8 @@ function writeEnvValues(env: string, config: WebSdkConfig, siteKey: string, debu
     VITE_RECAPTCHA_SITE_KEY: siteKey,
   }
   if (debugToken) values.E2E_APPCHECK_DEBUG_TOKEN = debugToken
+  const existingSuperadminUid = readEnvFile(`.env.${env}`)?.SUPERADMIN_UID
+  if (existingSuperadminUid) values.SUPERADMIN_UID = existingSuperadminUid
   writeFileSync(`.env.${env}`, renderEnvFile(values))
   console.log('  written (it is gitignored)')
 }
@@ -340,6 +382,8 @@ async function main(): Promise<void> {
   const number = projectNumber(projectId)
   await setAppCheckProvider(projectId, number, appId, siteKey)
   await enforceFirestore(projectId, number)
+  await enableEmailLinkSignIn(projectId)
+  await enforceAuth(projectId, number)
   const debugToken = ensureDebugToken(env, projectId, appId)
   writeEnvValues(env, config, siteKey, debugToken)
   const keyName = ensureSheetsKey(projectId)
@@ -347,7 +391,7 @@ async function main(): Promise<void> {
 
   console.log('\nDone. To use the Sheets API key in this shell:')
   console.log(`  export SHEETS_API_KEY=$(gcloud services api-keys get-key-string ${keyName} --format='value(keyString)')`)
-  console.log('\nNote: App Check Firestore enforcement can take up to 15 minutes to take effect.')
+  console.log('\nNote: App Check enforcement (Firestore and Auth) can take up to 15 minutes to take effect.')
 }
 
 main().catch((error: unknown) => {

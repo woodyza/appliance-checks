@@ -1,4 +1,5 @@
-const SUPERADMIN_LITERAL = "'emulator-superadmin'"
+export const EMULATOR_SUPERADMIN_UID = 'emulator-superadmin'
+const SUPERADMIN_LITERAL = `'${EMULATOR_SUPERADMIN_UID}'`
 const UID_PATTERN = /^[A-Za-z0-9]{1,128}$/
 
 export function substituteSuperadmin(rules: string, uid: string | undefined): string {

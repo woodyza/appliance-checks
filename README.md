@@ -39,14 +39,19 @@ Data model: see [the foundations design](./docs/designs/2026-09-25-foundations-d
 make dev
 ```
 
-Runs the Firestore emulator, a dev seed and Vite in one terminal (via `concurrently`); Ctrl-C stops them all. Vite serves at `http://localhost:5173` and talks to the emulator (`.env.development`, committed, points at the `demo-appliance-checks` project). There's no local mode that talks to `dev`/`prod`.
+Runs the Firestore and Auth emulators, a dev seed and Vite in one terminal (via `concurrently`); Ctrl-C stops them all. Vite serves at `http://localhost:5173` and talks to the emulator (`.env.development`, committed, points at the `demo-appliance-checks` project). There's no local mode that talks to `dev`/`prod`.
 
 - The seed creates a `devtst` brigade the first time (appliances `dev1` and `dev2`, a small Check Sheet and a previous Check to copy from) and prints its links: open `http://localhost:5173/devtst/dev1`. After that it leaves the data alone; `npm run dev:seed -- --reset` rebuilds it while `make dev` is running.
+- The seed also creates the emulator's superadmin Auth user (`e2e-admin@example.com`, UID `emulator-superadmin`, matching `firestore.rules`), so `http://localhost:5173/admin/sign-in` works locally: enter that email and open the link from the Emulator UI's Auth tab.
 - Emulator data is exported to `.emulator-data/` (gitignored) on exit and imported on the next start, so your Checks survive restarts. Delete the directory to start from nothing.
 - The Emulator UI (http://127.0.0.1:4000) shows the data.
 - `make e2e` reuses a running `make dev` (the e2e seed only touches its own `e2etst` brigade). `make check` needs port 8080 free, so stop `make dev` first.
 
 Env files: `.env.development` is committed (emulator config). `.env.dev` / `.env.prod` hold the real Firebase web config and reCAPTCHA site key; they're written by `make provision` and gitignored (see [`docs/infra-setup.md`](./docs/infra-setup.md)).
+
+## Admin sign-in
+
+`/admin/sign-in` (passwordless email link) and `/admin` (pick a brigade, appliance and month, then download a Monthly Report PDF) are superadmin-only for now (`isSuperadmin()` in `firestore.rules`); Brigade Admin and VSO sign-in land in #2. `src/state/auth.ts` wraps Firebase Auth; `src/data/admin.ts` reads brigades and a month's Checks; `src/report/pdf.ts` renders the PDF (jsPDF + jspdf-autotable, lazy-loaded).
 
 ## `make` targets
 

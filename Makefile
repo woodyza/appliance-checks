@@ -48,7 +48,7 @@ e2e:
 	elif curl -s -o /dev/null http://127.0.0.1:8080; then \
 		npm run e2e:seed -- --project emulator && npx playwright test; \
 	else \
-		PATH="$(EMULATOR_PATH)" npx firebase emulators:exec --only firestore --project demo-appliance-checks \
+		PATH="$(EMULATOR_PATH)" npx firebase emulators:exec --only firestore,auth --project demo-appliance-checks \
 			"npm run e2e:seed -- --project emulator && npx playwright test"; \
 	fi
 

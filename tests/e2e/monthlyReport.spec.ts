@@ -1,0 +1,67 @@
+import { firstOfPreviousMonth, today } from '../../src/domain/schedule'
+import { e2eEnv } from './env'
+import { expect, test } from './fixtures'
+
+// There's no inbox a script can read against `dev`, so this suite runs on the emulator only.
+test.skip(e2eEnv() === 'dev', 'no readable inbox against dev')
+
+const AUTH_EMULATOR_HOST = '127.0.0.1:9099'
+const EMULATOR_PROJECT_ID = 'demo-appliance-checks'
+const SUPERADMIN_EMAIL = 'e2e-admin@example.com'
+
+interface OobCode {
+  email: string
+  oobLink: string
+  requestType: string
+}
+
+async function latestSignInLink(email: string): Promise<string> {
+  const response = await fetch(`http://${AUTH_EMULATOR_HOST}/emulator/v1/projects/${EMULATOR_PROJECT_ID}/oobCodes`)
+  const { oobCodes } = (await response.json()) as { oobCodes: OobCode[] }
+  const matching = oobCodes.filter((code) => code.email === email && code.requestType === 'EMAIL_SIGNIN')
+  const latest = matching.at(-1)
+  if (!latest) throw new Error(`No EMAIL_SIGNIN link found for ${email}.`)
+  return latest.oobLink
+}
+
+test('downloads a Monthly Report', async ({ page }) => {
+  const previousMonth = firstOfPreviousMonth(today()).slice(0, 7)
+
+  await page.goto('/admin/sign-in')
+  await page.locator('input[type=email]').fill(SUPERADMIN_EMAIL)
+  await page.getByRole('button', { name: 'Send sign-in link' }).click()
+  await expect(page.locator('.picker-heading')).toHaveText('Check your inbox')
+
+  await page.goto(await latestSignInLink(SUPERADMIN_EMAIL))
+
+  await expect(page.locator('.brigade-select')).toBeVisible()
+  await page.locator('.brigade-select').selectOption({ label: 'E2E Test Brigade' })
+  await page.locator('.appliance-select').selectOption({ label: 'E2E 3' })
+  await page.locator('.month-select').selectOption(previousMonth)
+
+  const downloadPromise = page.waitForEvent('download')
+  await page.locator('.download-btn').click()
+  const download = await downloadPromise
+
+  expect(download.suggestedFilename()).toBe(`E2E 3-${previousMonth}.pdf`)
+
+  const stream = await download.createReadStream()
+  if (!stream) throw new Error('No download stream.')
+  const chunks: Buffer[] = []
+  for await (const chunk of stream) chunks.push(chunk as Buffer)
+  expect(Buffer.concat(chunks).subarray(0, 4).toString('utf8')).toBe('%PDF')
+})
+
+test('not authorised', async ({ page }) => {
+  const otherEmail = `e2e-other-${Date.now()}@example.com`
+
+  await page.goto('/admin/sign-in')
+  await page.locator('input[type=email]').fill(otherEmail)
+  await page.getByRole('button', { name: 'Send sign-in link' }).click()
+  await expect(page.locator('.picker-heading')).toHaveText('Check your inbox')
+
+  await page.goto(await latestSignInLink(otherEmail))
+
+  await expect(page.locator('.not-authorised')).toContainText('Not authorised')
+  await expect(page.locator('.not-authorised')).toContainText(/UID: [A-Za-z0-9]{20,}/)
+})

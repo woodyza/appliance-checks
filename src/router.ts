@@ -1,5 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { SLUG_PATTERN } from './domain/slug'
+import { authReady, currentUser } from './state/auth'
+import ReportView from './views/admin/ReportView.vue'
+import SignIn from './views/admin/SignIn.vue'
 import ApplianceList from './views/ApplianceList.vue'
 import CheckView from './views/CheckView.vue'
 import Landing from './views/Landing.vue'
@@ -12,6 +15,10 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', component: Landing },
+    // Explicit `/admin` routes go before the slug routes, even though `admin` can't match the
+    // 6-char slug pattern anyway.
+    { path: '/admin/sign-in', component: SignIn },
+    { path: '/admin', component: ReportView, meta: { requiresAuth: true } },
     { path: `/:slug(${SLUG_PATTERN})`, component: ApplianceList, sensitive: true },
     {
       // `sensitive` lives on the leaf (child) records, not this parent: vue-router 5's matcher
@@ -30,7 +37,14 @@ export const router = createRouter({
   ],
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const slug = to.params.slug
   if (typeof slug === 'string' && !SLUG_REGEX.test(slug)) return '/'
+
+  if (to.meta.requiresAuth) {
+    // Waits only for the first `onAuthStateChanged` result (a signed-in device's session
+    // restoring); `currentUser` itself stays live for any sign-in that happens afterwards.
+    await authReady()
+    if (!currentUser.value) return '/admin/sign-in'
+  }
 })

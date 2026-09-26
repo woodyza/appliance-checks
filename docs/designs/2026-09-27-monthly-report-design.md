@@ -71,6 +71,7 @@ Known limitation: a mid-month Check Day change can add phantom 0% columns for th
   - The base is the newest version among the columns, or `currentVersion` if the month has no Checks.
   - Walking older versions, each unplaced Item goes after its predecessor in that version, or first in its Section. Unplaced Sections are placed the same way.
   - Label, qty and input type come from the newest version containing the Item.
+  - Items are matched by id across Sections, so an Item moved to another Section shows once, in its newest Section. A Section left empty by moves is dropped.
 - **Cells**, per row and column:
   - `na`: the Item isn't in that column's version.
   - `notDue`: a Monthly Item on a weekly Check.
@@ -87,7 +88,8 @@ So a Check answered against an older version fills cells only for that version's
 
 `src/report/pdf.ts`, using jsPDF + jspdf-autotable loaded with a dynamic `import()`, so the Check entry bundle doesn't grow.
 
-- **Page and sizes**: A4 portrait with 10mm margins. Sized from the March PDF: label about 70mm, qty 14mm, 21mm per Y / N pair, 7pt text. Labels wrap. With 4 Checks, the pairs widen.
+- **Page and sizes**: A4 portrait with 10mm margins, greyscale. Sized from the March PDF: label about 70mm, qty 14mm, 7pt text, and the Y / N pairs share the rest (about 21mm each for 5 Checks). Labels wrap. With 4 Checks the pairs widen; with 6 (after a Check Day change) they narrow.
+- **Text**: jsPDF's built-in font only covers WinAnsi, so macrons fall back to the base letter (Taupō prints as Taupo).
 - **Header**: brigade name, Callsign and the month (e.g. "March 2026"). The date row is `dd/MM/yy`, with a small `v3` under each date, since the merged grid otherwise hides which version a Check used. autotable repeats the header rows on every page.
 - **Section rows**: grey, repeating "Qty | Y N | Y N …", as in March.
 - **Cells**:
@@ -95,7 +97,7 @@ So a Check answered against an older version fills cells only for that version's
   - `value`: text spanning the pair.
   - `notDue`: dark fill.
   - `na`: light grey "n/a" spanning the pair.
-- **Footer**: a % row, reading "Complete" at 100% and "not started" for a missing Check, plus a "Generated dd/MM/yy HH:mm" line.
+- **Footer**: a % row on the last page, reading "Complete" at 100% and "not started" for a missing Check, plus a "Generated dd/MM/yy HH:mm" line.
 - **File name**: `<callsign>-<YYYY-MM>.pdf`.
 - **Left out**: March's "MISSING - DEFECTS - ISSUES" row. Defects go in the Defects Book, and a Check has no free-text field.
 
@@ -104,21 +106,23 @@ So a Check answered against an older version fills cells only for that version's
 New idempotent `make provision` steps:
 
 1. Enable `identitytoolkit.googleapis.com`.
-2. Enable the Email provider with `passwordRequired: false`. If firebase-tools has no command for it (TBC), use `PATCH identitytoolkit.googleapis.com/admin/v2/projects/{p}/config`. The default authorised domains already cover `web.app`, `firebaseapp.com` and `localhost`.
-3. Try App Check enforcement on Auth (`appcheck:services:set identitytoolkit.googleapis.com enforced`, TBC). It protects `GetOobCode`, the call that sends the email. If it needs the Identity Platform upgrade or billing, drop it and record the accepted risk in `docs/infra-setup.md`.
+2. Enable the Email provider with `passwordRequired: false`. firebase-tools has no command for it, so this is `PATCH identitytoolkit.googleapis.com/admin/v2/projects/{p}/config`. If Auth has never been started on the project (`CONFIGURATION_NOT_FOUND`, TBC on `dev`), the error says to click Get started in the console once. The default authorised domains already cover `web.app`, `firebaseapp.com` and `localhost`.
+3. Try App Check enforcement on Auth, via the App Check REST API as for Firestore. It protects `GetOobCode`, the call that sends the email. It's best-effort: if it fails (eg needs the Identity Platform upgrade or billing), provisioning warns and carries on, and the accepted risk goes in `docs/infra-setup.md` (outcome TBC on `dev`).
 4. Keep `SUPERADMIN_UID` when rewriting `.env.<env>`, the same way `E2E_APPCHECK_DEBUG_TOKEN` is kept.
 
 `cli/deploy.ts`:
 
 - A pure `substituteSuperadmin(rules, uid)` replaces the `'emulator-superadmin'` literal. It throws unless the literal appears exactly once, so a rules refactor can't silently deploy the emulator UID.
-- The result goes to a gitignored `.deploy/firestore.rules`, deployed via a generated config that points at it. Whether `--config` resolves `dist` and the indexes relative to the repo root is TBC. The fallback is temporarily swapping `firebase.json`'s rules path.
+- The result goes to a gitignored `.deploy/firestore.rules`, deployed with `--config` pointing at a generated, gitignored `firebase.deploy.json` at the repo root: `firebase.json` with the rules path swapped. It has to sit at the root because firebase-tools resolves `dist`, the indexes and `.firebaserc` from the config file's directory.
+- The substitution runs before the confirm, so a malformed `SUPERADMIN_UID` (anything but letters and digits) fails before anything is built.
 - If `SUPERADMIN_UID` is unset, it substitutes `''` (which matches no one) and warns: "no superadmin yet: sign in, copy the UID from the 'not authorised' screen into `.env.<env>`, redeploy". So the first deploy can go out before the UID is known.
 
 ## Errors
 
 | Case | Shown |
 |---|---|
-| Link expired or used (`auth/invalid-action-code`) | "This link has expired. Request another." |
+| Link expired or used (`auth/invalid-action-code`) | "This link has expired. Request another.", with a button back to the email form |
+| Stored email doesn't match the link (`auth/invalid-email`) | Asks for the email again |
 | `auth/quota-exceeded` | "Sign-in emails are used up for today. Try again tomorrow." |
 | Signed in, not superadmin | "Not authorised", plus the UID |
 | Appliance has no Check Sheet version | "No Check Sheet yet", with Download disabled |
@@ -197,6 +201,24 @@ Sources:
 - https://firebase.google.com/docs/auth/limits
 - https://docs.cloud.google.com/identity-platform/docs/admin/app-check-integration
 - https://firebase.google.com/docs/app-check/enable-enforcement
+
+## Changes during implementation
+
+- **Moved Items** show once, in their newest Section (the design was silent on moves).
+- **% rounds down**, so only a Complete Check reads 100%.
+- **The month picker** is backed by a small `recentMonths` helper in `schedule.ts`.
+- **Deploy config** sits at the repo root (settles the `--config` TBC; no `firebase.json` swap needed), and the UID is validated before deploying.
+- **Provisioning** uses REST for both the Email provider and Auth App Check. Auth App Check is best-effort rather than required. Both outcomes are TBC until the manual `dev` run.
+- **PDF**: greyscale; the pairs narrow for 6 Checks instead of overflowing; the % row is on the last page only; macrons fall back to the base letter. Embedding a Unicode font would fix the macrons properly and is left as a follow-up.
+- **Sign-in** recovers from a bad or mismatched link (added in review).
+- **ReportView**: an appliance-load failure toasts instead of replacing the picker.
+- **Accepted as designed**:
+  - Missing columns render against the newest version the month's Checks use. So in the current month, if every existing Check is Frozen on an older version, Items only on the current version don't appear.
+  - Auth now loads on the anonymous Check pages too, about +27 kB gzip on the main bundle. It makes no network calls for anonymous users.
+- **Open follow-ups**:
+  - the manual `dev` run and its TBCs (Email provider PATCH, Auth App Check)
+  - updating #2's "Superadmin setup" line
+  - Unicode font embedding
 
 ## Out of scope
 

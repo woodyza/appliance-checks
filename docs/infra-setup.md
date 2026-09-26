@@ -1,6 +1,6 @@
 # Infrastructure setup
 
-How to stand up the `dev` and `prod` Firebase projects from scratch, e.g. for a new Google account. Later slices add steps (Auth in #6, billing and Cloud Functions in #8); they'll be added here.
+How to stand up the `dev` and `prod` Firebase projects from scratch, e.g. for a new Google account. Later slices add steps (billing and Cloud Functions in #8); they'll be added here.
 
 ## 1. Accounts
 
@@ -41,18 +41,31 @@ After the first run the id comes from the `.firebaserc` alias, so re-runs are ju
 For each project this creates, or checks and skips if it's already there:
 
 - the Google Cloud project with Firebase added
-- the Firestore, Firebase Rules, Firebase Hosting, App Check, reCAPTCHA Enterprise, Sheets and API Keys APIs
+- the Firestore, Firebase Rules, Firebase Hosting, App Check, reCAPTCHA Enterprise, Sheets, API Keys and Identity Toolkit (Auth) APIs
 - the `(default)` Firestore database, in `australia-southeast1` unless you pass `REGION=...` (a database's location can't be changed later)
 - the default Hosting site
 - a Firebase Web app (`appliance-checks-web`) and its SDK config
 - a reCAPTCHA Enterprise score key (`appliance-checks-web`, restricted to `<project>.web.app` and `<project>.firebaseapp.com`), registered as the app's App Check provider at a minimum score of 0.3 with a 1h token TTL
 - Firestore App Check enforcement, set to `enforced`
+- the Auth Email link (passwordless) sign-in provider, via `PATCH identitytoolkit.googleapis.com/admin/v2/projects/{p}/config` (no firebase-tools command enables it). If this 404s with `CONFIGURATION_NOT_FOUND`, click "Get started" under Authentication in the console once and re-run.
+- App Check enforcement on Auth, best-effort: it warns and carries on if it fails (e.g. needs the Identity Platform upgrade or billing), so the rest of provisioning still runs. **Outcome on `dev`: TBC** — record it here once the manual run below has happened.
 - `dev` only: an App Check debug token (display name `appliance-checks-e2e`) for `make e2e ENV=dev`, reusing `E2E_APPCHECK_DEBUG_TOKEN` from an existing `.env.dev` if there is one
-- `.env.<env>` (the Firebase web config and reCAPTCHA site key; gitignored, like `.firebaserc` — the config contains the project id)
+- `.env.<env>` (the Firebase web config and reCAPTCHA site key; gitignored, like `.firebaserc` — the config contains the project id). An existing `SUPERADMIN_UID` is kept across re-runs, the same as the debug token.
 - a Sheets API key named `appliance-checks-sheets-cli`, restricted to the Sheets API, for the CLI import (a browser import will need its own referrer-restricted key)
 - the environment's alias in `.firebaserc` (gitignored; on a new machine, re-running `make provision` recreates it)
 
 It's safe to re-run, e.g. after a step failed or a project was partly set up in the console. The key itself isn't printed; the script ends with the command to load it into your shell as `SHEETS_API_KEY`.
+
+### Superadmin UID bootstrap
+
+The superadmin's UID isn't known until they've signed in once, so it can't be provisioned up front:
+
+1. `make deploy ENV=<env>` with no `SUPERADMIN_UID` in `.env.<env>` yet: `firestore.rules` deploys trusting no one (a warning explains this).
+2. Sign in at `/admin/sign-in` with the superadmin's real email.
+3. The "Not authorised" screen shows the signed-in UID. Copy it into `.env.<env>` as `SUPERADMIN_UID=<uid>`.
+4. `make deploy ENV=<env>` again to pick it up.
+
+Firebase Auth's email-link sign-in is capped at 5 emails/day project-wide on the Spark plan (25,000 on Blaze); `dev` and `prod` both stay on Spark until #8, so this bootstrap and any testing against a real inbox should be mindful of that limit.
 
 App Check enforcement can take up to 15 minutes to take effect after `make provision` finishes, so wait before relying on it (e.g. before `make e2e ENV=dev` or checking the site in a browser).
 
