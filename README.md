@@ -54,7 +54,7 @@ Env files: `.env.development` is committed (emulator config). `.env.dev` / `.env
 - `make test-unit` / `make test-emulator` — either suite on its own.
 - `make lint` / `make typecheck`
 - `make dev` — the Firestore emulator, dev seed and Vite together; Ctrl-C stops them (see Local dev).
-- `make provision ENV=dev|prod PROJECT_ID=<id>` — creates or checks the Firebase project and its Firestore, Hosting, App Check/reCAPTCHA and Sheets API key, and writes `.env.<env>`; safe to re-run. See [`docs/infra-setup.md`](./docs/infra-setup.md).
+- `make provision ENV=dev|prod [PROJECT_ID=<id>]` — creates or checks the Firebase project and its Firestore, Hosting, App Check/reCAPTCHA and Sheets API key, and writes `.env.<env>`; safe to re-run. `PROJECT_ID` is only needed the first time, after that it comes from `.firebaserc`. See [`docs/infra-setup.md`](./docs/infra-setup.md).
 - `make deploy ENV=dev|prod` — builds and deploys Hosting + Firestore rules/indexes to that environment, behind an account confirmation prompt.
 - `make e2e [ENV=dev]` — Playwright, kept out of `make check`. No `ENV` (default): seeds then runs against the Firestore emulator and a local Vite server. `ENV=dev`: seeds and runs against deployed `dev`, using the `E2E_APPCHECK_DEBUG_TOKEN` from `.env.dev`. Requires `npx playwright install chromium` once.
 - `make e2e-report` — opens the HTML report from the last `make e2e` run: a screenshot and video of every spec locally, and a trace of any failure (failures only for `ENV=dev`).

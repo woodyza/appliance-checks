@@ -36,6 +36,8 @@ make provision ENV=dev PROJECT_ID=<dev project id>
 make provision ENV=prod PROJECT_ID=<prod project id>
 ```
 
+After the first run the id comes from the `.firebaserc` alias, so re-runs are just `make provision ENV=dev`.
+
 For each project this creates, or checks and skips if it's already there:
 
 - the Google Cloud project with Firebase added

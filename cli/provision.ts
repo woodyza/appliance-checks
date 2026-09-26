@@ -21,7 +21,7 @@ const SERVICES = [
 const SHEETS_KEY_NAME = 'appliance-checks-sheets-cli'
 const WEB_APP_NAME = 'appliance-checks-web'
 const RECAPTCHA_KEY_NAME = 'appliance-checks-web'
-const RECAPTCHA_MIN_SCORE = '0.3'
+const RECAPTCHA_MIN_SCORE = 0.3
 const PROJECT_ID_PATTERN = /^[a-z][a-z0-9-]{4,28}[a-z0-9]$/
 
 interface HostingSite {
@@ -206,21 +206,50 @@ function ensureRecaptchaKey(projectId: string): string {
   return siteKey
 }
 
-function setAppCheckProvider(projectId: string, appId: string, siteKey: string): void {
-  step('App Check provider: reCAPTCHA Enterprise')
-  run('npx', [
-    'firebase', 'appcheck:providers:set', 'recaptcha-enterprise',
-    '--app', appId, '--site-key', siteKey, '--min-score', RECAPTCHA_MIN_SCORE, '--token-ttl', '1h',
-    '--project', projectId, '--non-interactive',
-  ])
+const APP_CHECK_API = 'https://firebaseappcheck.googleapis.com/v1'
+
+// The provider and enforcement commands in firebase-tools are behind its `appcheckadmin` preview
+// experiment, so these call the App Check v1 API directly, as firebase-tools does.
+async function appCheckPatch(projectId: string, path: string, body: object, updateMask: string[]): Promise<void> {
+  const token = capture('gcloud', ['auth', 'print-access-token'])
+  if (!token.ok) throw new Error(`Could not get a gcloud access token: ${token.stderr}`)
+  const url = `${APP_CHECK_API}/${path}?updateMask=${updateMask.join(',')}`
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token.stdout}`,
+      'Content-Type': 'application/json',
+      'x-goog-user-project': projectId,
+    },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) throw new Error(`PATCH ${path} failed (${String(response.status)}): ${await response.text()}`)
 }
 
-function enforceFirestore(projectId: string): void {
+function projectNumber(projectId: string): string {
+  const described = capture('gcloud', ['projects', 'describe', projectId, '--format=value(projectNumber)'])
+  if (!described.ok || !described.stdout) throw new Error(`Could not get the project number: ${described.stderr}`)
+  return described.stdout
+}
+
+async function setAppCheckProvider(projectId: string, number: string, appId: string, siteKey: string): Promise<void> {
+  step('App Check provider: reCAPTCHA Enterprise')
+  await appCheckPatch(
+    projectId,
+    `projects/${number}/apps/${appId}/recaptchaEnterpriseConfig`,
+    { siteKey, tokenTtl: '3600s', riskAnalysis: { minValidScore: RECAPTCHA_MIN_SCORE } },
+    ['siteKey', 'tokenTtl', 'riskAnalysis.minValidScore'],
+  )
+}
+
+async function enforceFirestore(projectId: string, number: string): Promise<void> {
   step('App Check enforcement: Firestore')
-  run('npx', [
-    'firebase', 'appcheck:services:set', 'firestore', 'enforced',
-    '--force', '--project', projectId, '--non-interactive',
-  ])
+  await appCheckPatch(
+    projectId,
+    `projects/${number}/services/firestore.googleapis.com`,
+    { enforcementMode: 'ENFORCED' },
+    ['enforcementMode'],
+  )
 }
 
 function ensureDebugToken(env: string, projectId: string, appId: string): string | null {
@@ -274,8 +303,9 @@ async function main(): Promise<void> {
   })
   const env = values.env
   if (env !== 'dev' && env !== 'prod') throw new Error('--env must be dev or prod.')
-  const projectId = values['project-id']
-  if (!projectId) throw new Error('--project-id is required.')
+  const rc = readFirebaserc() ?? {}
+  const projectId = values['project-id'] ?? rc.projects?.[env]
+  if (!projectId) throw new Error(`--project-id is required: .firebaserc has no "${env}" alias yet.`)
   if (!PROJECT_ID_PATTERN.test(projectId)) {
     throw new Error('--project-id must be 6–30 lowercase letters, digits or hyphens, starting with a letter.')
   }
@@ -293,7 +323,6 @@ async function main(): Promise<void> {
     console.log('\nWarning: this prod id has no random suffix (e.g. appliance-checks-<6 random letters and digits>), so the site')
     console.log('is easy to guess and find. Project ids are permanent; see docs/infra-setup.md.\n')
   }
-  const rc = readFirebaserc() ?? {}
   const aliasUpdate = rc.projects?.[env] === projectId ? null : withAlias(rc, env, projectId)
   console.log(`.firebaserc ${env}:     ${aliasUpdate === null ? 'already set' : 'will be written'}`)
   if (gcloud.toLowerCase() !== firebase.toLowerCase()) {
@@ -308,8 +337,9 @@ async function main(): Promise<void> {
   const appId = ensureWebApp(projectId)
   const config = webConfig(projectId, appId)
   const siteKey = ensureRecaptchaKey(projectId)
-  setAppCheckProvider(projectId, appId, siteKey)
-  enforceFirestore(projectId)
+  const number = projectNumber(projectId)
+  await setAppCheckProvider(projectId, number, appId, siteKey)
+  await enforceFirestore(projectId, number)
   const debugToken = ensureDebugToken(env, projectId, appId)
   writeEnvValues(env, config, siteKey, debugToken)
   const keyName = ensureSheetsKey(projectId)

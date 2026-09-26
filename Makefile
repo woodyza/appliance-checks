@@ -29,9 +29,10 @@ dev:
 	PATH="$(EMULATOR_PATH)" npx concurrently --names emulator,seed,vite --prefix-colors blue,magenta,green \
 		--kill-others-on-fail "npm run emulators" "npm run dev:seed" "npm run dev"
 
-# make provision ENV=dev|prod PROJECT_ID=<id> [REGION=<region>]; see docs/infra-setup.md
+# make provision ENV=dev|prod [PROJECT_ID=<id>] [REGION=<region>]; PROJECT_ID defaults to the
+# .firebaserc alias for ENV, so it's only needed the first time. See docs/infra-setup.md.
 provision:
-	npx tsx cli/provision.ts --env $(ENV) --project-id $(PROJECT_ID) $(if $(REGION),--region $(REGION))
+	npx tsx cli/provision.ts --env $(ENV) $(if $(PROJECT_ID),--project-id $(PROJECT_ID)) $(if $(REGION),--region $(REGION))
 
 # make deploy ENV=dev|prod
 deploy:
