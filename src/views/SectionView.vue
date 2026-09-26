@@ -2,6 +2,7 @@
 import { computed, inject, onMounted, watch, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { CHECK_SESSION_KEY, REFRESH_FAILURE_MESSAGE } from '../state/checkSession'
+import WrittenInput from '../components/WrittenInput.vue'
 import type { Item } from '../domain/types'
 
 const session = inject(CHECK_SESSION_KEY)!
@@ -56,9 +57,8 @@ function answerChoice(item: Item, event: Event): void {
   void session.answer(item.id, value === '' ? null : value)
 }
 
-function answerWritten(item: Item, event: Event): void {
-  const value = (event.target as HTMLInputElement).value.trim()
-  void session.answer(item.id, value === '' ? null : value)
+function answerWritten(item: Item, value: string | null): void {
+  void session.answer(item.id, value)
 }
 
 function previousValueDisplay(item: Item): string | null {
@@ -188,14 +188,11 @@ watchEffect(() => {
         v-else
         class="text-input-wrap"
       >
-        <input
-          type="text"
-          maxlength="200"
-          :class="['item-input', isBlocked(item) ? 'saving' : '']"
+        <WrittenInput
           :value="session.responses.value[item.id] ?? ''"
-          placeholder="Enter value…"
-          @change="answerWritten(item, $event)"
-        >
+          :blocked="isBlocked(item)"
+          @commit="(value) => answerWritten(item, value)"
+        />
         <button
           v-if="!session.responses.value[item.id] && previousValueDisplay(item)"
           :class="['copy-prev-btn', isBlocked(item) ? 'saving' : '']"

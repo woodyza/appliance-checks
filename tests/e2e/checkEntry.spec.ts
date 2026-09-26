@@ -171,3 +171,26 @@ test('switches appliance', async ({ page }) => {
   await page.locator('.appliance-card', { hasText: 'E2E 2' }).click()
   await expect(page.locator('.header-callsign')).toHaveText('E2E 2')
 })
+
+test('keeps typing when a re-read lands mid-edit', async ({ page }) => {
+  await page.goto('/e2etst/e2e2')
+  await expect(page.locator('.section-card').first()).toBeVisible()
+
+  // Delay reads so the re-read on Section open lands after the typing but before the blur.
+  await page.route('**/Listen/channel**', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 800))
+    await route.continue().catch(() => {})
+  })
+  await openSection(page, 'Road user details')
+  const odometer = itemRow(page, 'Odometer').locator('.item-input')
+  await odometer.fill('777')
+  await page.waitForTimeout(1500)
+  await expect(odometer).toHaveValue('777')
+
+  await odometer.press('Tab')
+  await expect(odometer).toHaveClass(/saving/)
+  await expect(odometer).not.toHaveClass(/saving/)
+  await page.unroute('**/Listen/channel**')
+  await page.reload()
+  await expect(itemRow(page, 'Odometer').locator('.item-input')).toHaveValue('777')
+})
