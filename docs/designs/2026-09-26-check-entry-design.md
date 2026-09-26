@@ -2,6 +2,8 @@
 
 Port the Apps Script check UI onto Firestore, so a firefighter can scan an Appliance's QR code and run its Check with no sign-in (ADR 0001). Builds on the foundations design (`2026-09-25-foundations-design.md`). Terminology follows `CONTEXT.md`.
 
+Implemented in PR #10. This doc is updated to what shipped; why each change was made is in `docs/plans/impl/check-entry.md` (Decisions).
+
 Frozen only pins the Check Sheet version a Check renders against (ADR 0002). Answers on any Check in the current or previous month stay editable.
 
 ## Data model
@@ -44,20 +46,19 @@ match /checks/{checkId}
 ```
 
 - `firstOfPreviousMonth()` builds `'YYYY-MM-01'` from `request.time`. The rules only allow a list whose query guarantees that lower bound, and `YYYY-MM-DD` strings sort correctly.
-  - TBC: that the rules engine proves a range bound computed from `request.time`. The rules tests settle it.
-  - If it can't, add a `scheduledAt` timestamp field and compare it against `timestamp.date(...)` instead.
+  - The rules engine does prove a range bound computed from `request.time` (verified in the emulator).
 - Collection-group queries on `checks` stay denied, so listing never crosses brigades.
 - `validCheckWrite()` requires:
   - **Keys:** only `applianceId, scheduledDate, monthly, checkSheetVersion, responses, updatedAt`.
   - **Identity:**
     - `checkId == applianceId + '_' + scheduledDate`.
-    - On create, the appliance doc exists (one `exists()` read, create only).
+    - On create, the appliance doc exists and `checkSheetVersion` ≤ its `currentCheckSheetVersion` (one `get()`).
     - On update, `applianceId`, `scheduledDate` and `monthly` are unchanged.
   - **Date window:** `scheduledDate` matches `^\d{4}-\d{2}-\d{2}$` and falls between the 1st of the previous month and `request.time + 1 day`. It doesn't check that the date is a real Check Day, so a Check Day change doesn't break it.
-  - **Version:** `checkSheetVersion` is an int ≥ 1, and on update ≥ the existing value.
+  - **Version:** `checkSheetVersion` is an int ≥ 1, and on update ≥ the existing value. When an update changes it, it must also be ≤ the appliance's `currentCheckSheetVersion` (a `get()` only then), so a leaked link can't brick a Check with a huge version.
   - **Responses:**
     - `responses` is a map of at most 500 keys.
-    - At most one key is added, changed or removed per write (`diff().affectedKeys()`), so the one changed value can be validated without loops.
+    - At most one key is added, changed or removed per write (`diff().affectedKeys().size() <= 1`). Rules have no `Set.toList()`, so the new key and value are found with `keys().removeAll(...)` / `values().removeAll(...)` against the previous map; a value that drops out equals one already stored, which was validated when written.
     - A changed value must be a string of 1–200 chars under a key matching the Item id format.
     - A version-only write (opt-in to latest) changes zero keys.
   - **Timestamp:** `updatedAt == request.time`.
@@ -106,10 +107,12 @@ Loading a Check:
 
 1. Get the brigade (`checkDay`) and the appliance (callsign, `currentCheckSheetVersion`).
 2. List the appliance's Checks with `scheduledDate >= firstOfPreviousMonth`. That's one query, and it covers the selector, the default rule and the copy-from-previous lookback. It also finds Checks created under an old Check Day.
-3. Pick the default Check: the current window's Check, unless that doc doesn't exist and the latest existing Check before it is started but not Complete. In that case, the latter.
+3. Pick the default Check:
+   - An existing Check dated after the current window's date but not after today (created under an old Check Day, still in its window) is the current one.
+   - Otherwise the current window's Check, unless that doc doesn't exist and the immediately previous Check (its window ends at the current one) is started but not Complete. In that case, the latter.
    - This covers late Checks near month end, and applies mid-month too.
-   - A previous Check that was never started doesn't count, otherwise one skipped week would pull everyone onto a stale Check.
-4. The selector lists every Check from the 1st of the default Check's month up to the current window's Check. It's the union of existing docs and dates computed from the current `checkDay`, sorted, so the current window's Check can always be started.
+   - A previous Check that was never started doesn't count, and neither does an older one, otherwise one skipped or abandoned week would pull everyone onto a stale Check.
+4. The selector lists every Check from the 1st of the default Check's month: existing docs up to today, plus dates computed from the current `checkDay` up to the current window's Check, sorted, so the current window's Check can always be started.
 5. The selected Check renders against its pinned version if Frozen, otherwise the current version. A Check that doesn't exist yet shows at 0% on the current version.
 6. "Copy from previous" offers the nearest non-empty value from any earlier listed Check.
 
@@ -136,14 +139,12 @@ Writing:
   1. Enable the `firebaseappcheck` and `recaptchaenterprise` APIs.
   2. Register the Firebase web app (`firebase apps:create WEB`) and write its `apps:sdkconfig`.
   3. Create a reCAPTCHA Enterprise score key restricted to `<project>.web.app` and `<project>.firebaseapp.com`.
-  4. Register it as the app's App Check provider (REST `recaptchaEnterpriseConfig`).
+  4. Register it as the app's App Check provider (App Check v1 REST `recaptchaEnterpriseConfig`, min score 0.3 so only the lowest band is rejected). firebase-tools' own provider and enforcement commands sit behind a preview experiment, so provision calls the API.
   5. Set Firestore enforcement to `ENFORCED` (REST `services/firestore.googleapis.com`). Nothing reads Firestore from a browser before #5 deploys, so the order doesn't matter.
-  6. `dev` only: register an App Check debug token for e2e runs, kept out of git.
+  6. `dev` only: register an App Check debug token for e2e runs (`firebase appcheck:debugtokens:create`), kept out of git in `.env.dev`.
 - Local dev runs only against the emulator. There's no mode for a local build against `dev`.
 - The CLI tools use the Admin SDK and are unaffected.
-- To verify on `dev` and record in `docs/infra-setup.md` (and on #5):
-  - Whether Enterprise's free tier works on Spark without a billing instrument (the docs conflict). If not, fall back to the reCAPTCHA v3 provider, a small switch in `provision.ts` and `firebase.ts`.
-  - Whether requests App Check rejects are billed or count against the Spark quota (undocumented). Script a batch of unattested REST reads, then compare the usage dashboard the next day. If they do count, App Check protects the data but not the quota.
+- Verified on `dev` (details in `docs/infra-setup.md`): Enterprise works on Spark without billing, and App Check-rejected requests didn't show up in billable usage.
 
 ## Testing
 
@@ -173,13 +174,14 @@ Writing:
     - a fixture Check Sheet version (Weekly and Monthly Y/N, choice, written)
     - a previous Check with a written value
   - The seed script deletes that brigade's Checks before each run.
-  - On `dev`, the registered debug token is injected with `addInitScript`. TBC: that the JS SDK honours `FIREBASE_APPCHECK_DEBUG_TOKEN` whichever provider it was initialised with. If it doesn't, the `dev` build needs a debug-provider switch.
+  - On `dev`, the registered debug token is injected with `addInitScript`; the SDK honours it with the reCAPTCHA Enterprise provider (verified on `dev`).
   - Specs:
     1. The QR URL opens the current Check with Sections and %s, and a Y answer survives a reload.
     2. Choice and written Items save, and "Copy from previous" fills in the seeded value.
     3. The selector switches Checks, and answers land on the selected one.
     4. Two browser contexts answering different Items of the same Check both keep their answers.
     5. Switch → appliance list → another appliance's Check.
+    6. Typing in a written Item survives a re-read landing mid-edit (reads delayed to force it).
   - Date edge cases stay in unit tests, because faking the browser clock would fight the rules' server-side write window.
 - Not unit-tested: `firebase.ts`, `data/checks.ts` and the provision steps. They're thin wrappers covered by e2e and a manual run.
 
@@ -192,7 +194,7 @@ Writing:
 
 ## Notes
 
-Research findings from the design session. The commands are from the CLI help and the API discovery doc, not tried yet.
+Research findings from the design session, kept as written; `docs/infra-setup.md` has what the `dev` run showed.
 
 - Setup commands and calls:
   - Web app: `firebase apps:create WEB <name>`, then `firebase apps:sdkconfig WEB <appId>`.

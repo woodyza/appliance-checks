@@ -42,7 +42,7 @@ brigades/{slug}/appliances/{applianceId}/checkSheetVersions/{n}   anonymous: get
   sections[{ id, title, items[{ id, label, qty, inputType: 'yn' | 'choice' | 'written', options?, scope: 'weekly' | 'monthly' }] }]
 
 brigades/{slug}/checks/{applianceId}_{YYYY-MM-DD}
-  applianceId, scheduledDate, checkSheetVersion, responses{ itemId: ... }   (finalised in #5)
+  applianceId, scheduledDate, checkSheetVersion, responses{ itemId: ... }   (finalised in #5: see 2026-09-26-check-entry-design.md)
 ```
 
 - Brigade Link slug: 6 chars from lowercase alphanumerics minus `0 o 1 l i` (~30 bits). Obscurity only (ADR 0001); App Check / budget alerts are the answer to scripted guessing, not a longer slug.
@@ -76,9 +76,9 @@ CLI tools:
 
 ## Environments and deploy
 
-- `dev` and `prod` Firebase projects as `.firebaserc` aliases, plus local emulators (Firestore, Hosting). The repo is public and the project id is the Hosting address, so `.firebaserc` is gitignored and the prod id gets a random suffix. Hosting sends `X-Robots-Tag: noindex, nofollow` and serves a disallow-all `robots.txt`. App Check (#5) and a Blaze spending cap (#8) handle abuse and cost.
+- `dev` and `prod` Firebase projects as `.firebaserc` aliases, plus local emulators (Firestore; the Hosting emulator was dropped in #5). The repo is public and the project id is the Hosting address, so `.firebaserc` is gitignored and the prod id gets a random suffix. Hosting sends `X-Robots-Tag: noindex, nofollow` and serves a disallow-all `robots.txt`. App Check (#5) and a Blaze spending cap (#8) handle abuse and cost.
 - `make provision ENV=dev|prod PROJECT_ID=<id>` creates or checks each project (Firebase, Firestore, Hosting site, Sheets API and key, `.firebaserc` alias), skipping steps already done. Setup and account migration are documented in `docs/infra-setup.md`.
-- Firebase web config per environment in committed `.env.dev` / `.env.prod`.
+- Firebase web config per environment in committed `.env.dev` / `.env.prod`. (Superseded in #5: they're gitignored and written by `make provision`, since the config contains the project id.)
 - `make deploy ENV=dev`: `vite build --mode dev`, then `firebase deploy --project dev --only hosting,firestore:rules,firestore:indexes`, behind the account guard. Hosting rewrites to `index.html`.
 - Sheets API key for the CLI (`appliance-checks-sheets-cli`): restricted to the Sheets API. A browser import will need a separate key restricted to the Hosting domains, since Node's `fetch` sends no referrer and would fail a referrer-restricted key.
 

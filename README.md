@@ -2,7 +2,7 @@
 
 A brigade's routine checks that each appliance's equipment is present and serviceable, recorded on a phone at the appliance rather than on paper or a spreadsheet. Terminology is defined in [`CONTEXT.md`](./CONTEXT.md).
 
-Each brigade gets an unguessable Brigade Link (`https://<host>/{slug}`), reached almost entirely via QR codes on its appliances. No sign-in is needed to run a Check; editing Check Sheets and other admin tasks require an authenticated Brigade Admin or VSO (not yet built — see [the design doc](./docs/designs/2026-09-25-foundations-design.md)).
+Each brigade gets an unguessable Brigade Link (`https://<host>/{slug}`), reached almost entirely via QR codes on its appliances. No sign-in is needed to run a Check; editing Check Sheets and other admin tasks require an authenticated Brigade Admin or VSO (not built yet: admin sign-in starts with #6).
 
 ## Repository layout
 
@@ -12,7 +12,8 @@ src/
   domain/        pure TS: types, slug generation, schedule/Check logic, Check Sheet import (fetch, parse, reconcile)
   data/          thin Firestore access (checks.ts)
   state/         Vue composables holding reactive session state (checkSession.ts)
-  views/         Vue views
+  views/         Vue views (one per route)
+  components/    shared Vue components
 cli/             admin CLI tools (provision, create-brigade, add-appliance, import-check-sheet, deploy, e2e-seed)
 tests/
   domain/        unit tests
@@ -22,7 +23,7 @@ tests/
 firebase.json, firestore.rules, firestore.indexes.json
 ```
 
-Data model: see [the design doc](./docs/designs/2026-09-25-foundations-design.md#data-model). Decisions worth keeping are recorded as ADRs in [`docs/adr/`](./docs/adr/).
+Data model: see [the foundations design](./docs/designs/2026-09-25-foundations-design.md#data-model), and [the check entry design](./docs/designs/2026-09-26-check-entry-design.md#data-model) for Checks and their rules. Decisions worth keeping are recorded as ADRs in [`docs/adr/`](./docs/adr/).
 
 ## Prerequisites
 
