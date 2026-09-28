@@ -23,9 +23,11 @@ For the Firebase CLI, run `npx firebase login` (or `npx firebase login:use <emai
 
 The brigade and import CLI tools use Application Default Credentials instead: `gcloud auth application-default login` as the same account. ADC is machine-wide, not per gcloud configuration, so re-run it when switching; the tools show the ADC account and ask before touching `dev` or `prod`.
 
-## 2. One-off manual step
+## 2. One-off manual steps
 
 A Google account that has never used Firebase has to accept the Firebase terms once: open https://console.firebase.google.com and follow the prompt. Until then, creating a project from the CLI fails.
+
+Each new project also needs Authentication started once in the console. The API can't do it without upgrading the project to Identity Platform. The project doesn't exist until `make provision` creates it, so the first run stops at the Email provider step with `CONFIGURATION_NOT_FOUND`. Then open Authentication in the project's console, click "Get started", and re-run.
 
 ## 3. Provision each environment
 
@@ -47,8 +49,8 @@ For each project this creates, or checks and skips if it's already there:
 - a Firebase Web app (`appliance-checks-web`) and its SDK config
 - a reCAPTCHA Enterprise score key (`appliance-checks-web`, restricted to `<project>.web.app` and `<project>.firebaseapp.com`), registered as the app's App Check provider at a minimum score of 0.3 with a 1h token TTL
 - Firestore App Check enforcement, set to `enforced`
-- the Auth Email link (passwordless) sign-in provider, via `PATCH identitytoolkit.googleapis.com/admin/v2/projects/{p}/config` (no firebase-tools command enables it). If this 404s with `CONFIGURATION_NOT_FOUND`, click "Get started" under Authentication in the console once and re-run.
-- App Check enforcement on Auth, best-effort: it warns and carries on if it fails (e.g. needs the Identity Platform upgrade or billing), so the rest of provisioning still runs. **Outcome on `dev`: TBC** — record it here once the manual run below has happened.
+- the Auth Email link (passwordless) sign-in provider, via `PATCH identitytoolkit.googleapis.com/admin/v2/projects/{p}/config` (no firebase-tools command enables it). On a new project this fails with `CONFIGURATION_NOT_FOUND` until Authentication has been started in the console (see section 2).
+- Auth App Check enforcement, set to `enforced`. It protects the call that sends sign-in emails, so a script can't use up the day's quota. It's best-effort: if it fails, provisioning warns and carries on. On `dev` it went through on Spark, without Identity Platform.
 - `dev` only: an App Check debug token (display name `appliance-checks-e2e`) for `make e2e ENV=dev`, reusing `E2E_APPCHECK_DEBUG_TOKEN` from an existing `.env.dev` if there is one
 - `.env.<env>` (the Firebase web config and reCAPTCHA site key; gitignored, like `.firebaserc` — the config contains the project id). An existing `SUPERADMIN_UID` is kept across re-runs, the same as the debug token.
 - a Sheets API key named `appliance-checks-sheets-cli`, restricted to the Sheets API, for the CLI import (a browser import will need its own referrer-restricted key)

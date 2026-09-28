@@ -106,8 +106,8 @@ So a Check answered against an older version fills cells only for that version's
 New idempotent `make provision` steps:
 
 1. Enable `identitytoolkit.googleapis.com`.
-2. Enable the Email provider with `passwordRequired: false`. firebase-tools has no command for it, so this is `PATCH identitytoolkit.googleapis.com/admin/v2/projects/{p}/config`. If Auth has never been started on the project (`CONFIGURATION_NOT_FOUND`, TBC on `dev`), the error says to click Get started in the console once. The default authorised domains already cover `web.app`, `firebaseapp.com` and `localhost`.
-3. Try App Check enforcement on Auth, via the App Check REST API as for Firestore. It protects `GetOobCode`, the call that sends the email. It's best-effort: if it fails (eg needs the Identity Platform upgrade or billing), provisioning warns and carries on, and the accepted risk goes in `docs/infra-setup.md` (outcome TBC on `dev`).
+2. Enable the Email provider with `passwordRequired: false`. firebase-tools has no command for it, so this is `PATCH identitytoolkit.googleapis.com/admin/v2/projects/{p}/config`. It fails with `CONFIGURATION_NOT_FOUND` until Auth has been started on the project, which `dev` confirmed, so the error says to click Get started in the console once. The default authorised domains already cover `web.app`, `firebaseapp.com` and `localhost`.
+3. Try App Check enforcement on Auth, via the App Check REST API as for Firestore. It protects `GetOobCode`, the call that sends the email. It's best-effort: if it fails (eg needs the Identity Platform upgrade or billing), provisioning warns and carries on, and the accepted risk goes in `docs/infra-setup.md`. On `dev` it worked on Spark, with no Identity Platform upgrade, and sign-in works with it enforced.
 4. Keep `SUPERADMIN_UID` when rewriting `.env.<env>`, the same way `E2E_APPCHECK_DEBUG_TOKEN` is kept.
 
 `cli/deploy.ts`:
@@ -208,7 +208,7 @@ Sources:
 - **% rounds down**, so only a Complete Check reads 100%.
 - **The month picker** is backed by a small `recentMonths` helper in `schedule.ts`.
 - **Deploy config** sits at the repo root (settles the `--config` TBC; no `firebase.json` swap needed), and the UID is validated before deploying.
-- **Provisioning** uses REST for both the Email provider and Auth App Check. Auth App Check is best-effort rather than required. Both outcomes are TBC until the manual `dev` run.
+- **Provisioning** uses REST for both the Email provider and Auth App Check. Auth App Check is best-effort rather than required. On `dev`, Auth needed a one-off "Get started" in the console, and Auth App Check enforcement worked on Spark.
 - **PDF**: greyscale; the pairs narrow for 6 Checks instead of overflowing; the % row is on the last page only; macrons fall back to the base letter. Embedding a Unicode font would fix the macrons properly and is left as a follow-up.
 - **Sign-in** recovers from a bad or mismatched link (added in review).
 - **ReportView**: an appliance-load failure toasts instead of replacing the picker.
@@ -216,7 +216,6 @@ Sources:
   - Missing columns render against the newest version the month's Checks use. So in the current month, if every existing Check is Frozen on an older version, Items only on the current version don't appear.
   - Auth now loads on the anonymous Check pages too, about +27 kB gzip on the main bundle. It makes no network calls for anonymous users.
 - **Open follow-ups**:
-  - the manual `dev` run and its TBCs (Email provider PATCH, Auth App Check)
   - updating #2's "Superadmin setup" line
   - Unicode font embedding
 
