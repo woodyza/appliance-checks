@@ -25,8 +25,19 @@ const BASE_DATE = addDays(TODAY, -3)
 const CAB_ID = 'cab22222'
 const TCH_ID = 'tch22222'
 
+const OLD_CHECK_DATE = '2000-01-03'
+const OLD_CHECK_PATH = `${BRIGADE_PATH}/checks/8011_${OLD_CHECK_DATE}`
+
 function unauthedDb(): firebase.firestore.Firestore {
   return testEnv.unauthenticatedContext().firestore()
+}
+
+function superadminDb(): firebase.firestore.Firestore {
+  return testEnv.authenticatedContext('emulator-superadmin').firestore()
+}
+
+function otherUserDb(): firebase.firestore.Firestore {
+  return testEnv.authenticatedContext('some-other-uid').firestore()
 }
 
 function checkData(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -59,6 +70,14 @@ beforeAll(async () => {
     await db.doc(CHECK_PATH).set({
       applianceId: '8011',
       scheduledDate: TODAY,
+      monthly: false,
+      checkSheetVersion: 1,
+      responses: {},
+      updatedAt: new Date(),
+    })
+    await db.doc(OLD_CHECK_PATH).set({
+      applianceId: '8011',
+      scheduledDate: OLD_CHECK_DATE,
       monthly: false,
       checkSheetVersion: 1,
       responses: {},
@@ -351,5 +370,53 @@ describe('firestore.rules', () => {
     ['create for an appliance that does not exist', `9999_${BASE_DATE}`, checkData({ applianceId: '9999' })],
   ])('denies %s', async (_name, checkId, data) => {
     await assertFails(unauthedDb().doc(`${BRIGADE_PATH}/checks/${checkId}`).set(data, { merge: true }))
+  })
+})
+
+describe('superadmin', () => {
+  it('allows listing brigades', async () => {
+    await assertSucceeds(superadminDb().collection('brigades').get())
+  })
+
+  it('allows a checks list bounded before firstOfPreviousMonth', async () => {
+    await assertSucceeds(
+      superadminDb()
+        .collection(`${BRIGADE_PATH}/checks`)
+        .where('applianceId', '==', '8011')
+        .where('scheduledDate', '>=', '2000-01-01')
+        .where('scheduledDate', '<', firstOfPreviousMonth(TODAY))
+        .orderBy('scheduledDate')
+        .get(),
+    )
+  })
+
+  it('allows getting an old Check', async () => {
+    await assertSucceeds(superadminDb().doc(OLD_CHECK_PATH).get())
+  })
+
+  it.each([
+    ['brigade', BRIGADE_PATH, { name: 'x' }],
+    ['appliance', APPLIANCE_PATH, { callsign: 'x' }],
+    ['version', VERSION_PATH, { version: 2 }],
+  ])('denies writing to %s', async (_name, path, data) => {
+    await assertFails(superadminDb().doc(path).set(data))
+  })
+})
+
+describe('another signed-in user', () => {
+  it('denies listing brigades', async () => {
+    await assertFails(otherUserDb().collection('brigades').get())
+  })
+
+  it('denies a checks list bounded before firstOfPreviousMonth', async () => {
+    await assertFails(
+      otherUserDb()
+        .collection(`${BRIGADE_PATH}/checks`)
+        .where('applianceId', '==', '8011')
+        .where('scheduledDate', '>=', '2000-01-01')
+        .where('scheduledDate', '<', firstOfPreviousMonth(TODAY))
+        .orderBy('scheduledDate')
+        .get(),
+    )
   })
 })

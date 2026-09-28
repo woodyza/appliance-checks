@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   checkDatesBetween,
   currentCheckDate,
+  firstOfNextMonth,
   firstOfPreviousMonth,
   isLastOfMonth,
   nextCheckDate,
+  recentMonths,
   today,
 } from '../../src/domain/schedule'
 
@@ -67,5 +69,21 @@ describe('firstOfPreviousMonth', () => {
 describe('checkDatesBetween', () => {
   it('returns every Check Day date in the range, ascending', () => {
     expect(checkDatesBetween('2026-09-01', '2026-09-21', 1)).toEqual(['2026-09-07', '2026-09-14', '2026-09-21'])
+  })
+})
+
+describe('firstOfNextMonth', () => {
+  it('crosses a year boundary in December', () => {
+    expect(firstOfNextMonth('2026-12-15')).toBe('2027-01-01')
+  })
+
+  it('returns the 1st of the next month otherwise', () => {
+    expect(firstOfNextMonth('2026-03-31')).toBe('2026-04-01')
+  })
+})
+
+describe('recentMonths', () => {
+  it('returns the current month first, then earlier months, crossing a year boundary', () => {
+    expect(recentMonths('2026-02-10', 3)).toEqual(['2026-02', '2026-01', '2025-12'])
   })
 })

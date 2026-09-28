@@ -70,3 +70,20 @@ export function firstOfPreviousMonth(date: string): string {
   const previousYear = month === 1 ? year - 1 : year
   return `${previousYear}-${String(previousMonth).padStart(2, '0')}-01`
 }
+
+export function firstOfNextMonth(date: string): string {
+  const [year, month] = date.slice(0, 7).split('-').map(Number)
+  const nextMonth = month === 12 ? 1 : month + 1
+  const nextYear = month === 12 ? year + 1 : year
+  return `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
+}
+
+export function recentMonths(today: string, count: number): string[] {
+  const months: string[] = []
+  let date = firstOfMonth(today)
+  for (let i = 0; i < count; i++) {
+    months.push(date.slice(0, 7))
+    date = firstOfPreviousMonth(date)
+  }
+  return months
+}

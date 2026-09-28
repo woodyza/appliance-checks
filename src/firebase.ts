@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app'
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check'
+import { type Auth, connectAuthEmulator, getAuth } from 'firebase/auth'
 import { connectFirestoreEmulator, type Firestore, getFirestore } from 'firebase/firestore'
 
 const firebaseConfig = {
@@ -21,7 +22,9 @@ if (!useEmulator) {
 }
 
 export const db: Firestore = getFirestore(app)
+export const auth: Auth = getAuth(app)
 
 if (useEmulator) {
   connectFirestoreEmulator(db, '127.0.0.1', 8080)
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })
 }

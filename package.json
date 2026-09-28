@@ -9,7 +9,7 @@
     "typecheck": "vue-tsc --noEmit",
     "test:unit": "vitest run --project unit",
     "test:emulator": "firebase emulators:exec --only firestore --project demo-appliance-checks \"vitest run --project emulator\"",
-    "emulators": "firebase emulators:start --only firestore --project demo-appliance-checks --import=.emulator-data --export-on-exit=.emulator-data",
+    "emulators": "firebase emulators:start --only firestore,auth --project demo-appliance-checks --import=.emulator-data --export-on-exit=.emulator-data",
     "dev:seed": "tsx cli/dev-seed.ts",
     "cli:create-brigade": "tsx cli/create-brigade.ts",
     "cli:add-appliance": "tsx cli/add-appliance.ts",
@@ -19,6 +19,8 @@
   },
   "dependencies": {
     "firebase": "^12.19.0",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "vue": "^3.5.43",
     "vue-router": "^5.3.1"
   },
