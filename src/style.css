@@ -549,6 +549,19 @@ header {
   pointer-events: none;
 }
 
+/* Checkbox list (User admin brigade picker) */
+.checkbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+}
+
 /* Text input */
 .text-input-wrap {
   display: flex;

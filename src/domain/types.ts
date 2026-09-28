@@ -11,7 +11,6 @@ export interface Brigade {
 
 export interface BrigadeSettings {
   reportEmail?: string
-  assignedVsoId?: string
 }
 
 export interface Appliance {
@@ -61,4 +60,13 @@ export interface Check {
   monthly: boolean
   checkSheetVersion: number
   responses: Record<string, string>
+}
+
+export type AdminRole = 'brigadeAdmin' | 'vso'
+
+export interface AdminUser {
+  email: string
+  displayName: string | null
+  role: AdminRole
+  brigadeIds: string[]
 }

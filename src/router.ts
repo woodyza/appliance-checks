@@ -1,8 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { SLUG_PATTERN } from './domain/slug'
 import { authReady, currentUser } from './state/auth'
-import ReportView from './views/admin/ReportView.vue'
+import AdminHub from './views/admin/AdminHub.vue'
+import BrigadeAdminView from './views/admin/BrigadeAdminView.vue'
 import SignIn from './views/admin/SignIn.vue'
+import UserAdminView from './views/admin/UserAdminView.vue'
 import ApplianceList from './views/ApplianceList.vue'
 import CheckView from './views/CheckView.vue'
 import Landing from './views/Landing.vue'
@@ -18,8 +20,17 @@ export const router = createRouter({
     // Explicit `/admin` routes go before the slug routes, even though `admin` can't match the
     // 6-char slug pattern anyway.
     { path: '/admin/sign-in', component: SignIn },
-    { path: '/admin', component: ReportView, meta: { requiresAuth: true } },
+    { path: '/admin', component: AdminHub, meta: { requiresAuth: true } },
+    { path: '/admin/users', component: UserAdminView, meta: { requiresAuth: true } },
     { path: `/:slug(${SLUG_PATTERN})`, component: ApplianceList, sensitive: true },
+    {
+      // The static `admin` segment outranks `/:slug/:applianceId`'s param, so this shadows an
+      // appliance id'd "admin" (appliance ids come from the CLI, so don't use that one).
+      path: `/:slug(${SLUG_PATTERN})/admin`,
+      component: BrigadeAdminView,
+      meta: { requiresAuth: true },
+      sensitive: true,
+    },
     {
       // `sensitive` lives on the leaf (child) records, not this parent: vue-router 5's matcher
       // fails to register the empty-path child at all when the parent record that owns

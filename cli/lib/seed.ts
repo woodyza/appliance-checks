@@ -92,12 +92,18 @@ export interface SeedBrigadeInput {
   name: string
   appliances: { id: string; callsign: string }[]
   sections: Section[]
+  active?: boolean
 }
 
 // Check Day is today's weekday, so the current Check is today's.
 export async function writeBrigade(db: Firestore, input: SeedBrigadeInput): Promise<void> {
   const brigadeRef = db.collection('brigades').doc(input.slug)
-  await brigadeRef.set({ brigadeId: randomUUID(), name: input.name, checkDay: weekday(today()), active: true })
+  await brigadeRef.set({
+    brigadeId: randomUUID(),
+    name: input.name,
+    checkDay: weekday(today()),
+    active: input.active ?? true,
+  })
   await brigadeRef.collection('private').doc('settings').set({})
 
   for (const appliance of input.appliances) {

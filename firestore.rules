@@ -20,6 +20,16 @@ service cloud.firestore {
     return request.auth != null && request.auth.uid == 'emulator-superadmin';
   }
 
+  function adminEmail() {
+    return request.auth.token.get('email', null).lower();
+  }
+
+  function hasVerifiedEmail() {
+    return request.auth != null
+      && request.auth.token.get('email', null) != null
+      && request.auth.token.get('email_verified', false) == true;
+  }
+
   // `before` is the responses map prior to this write: {} on create, resource.data.responses on update.
   function validCheckWrite(checkId, before) {
     let data = request.resource.data;
@@ -44,9 +54,23 @@ service cloud.firestore {
   }
 
   match /databases/{database}/documents {
+    // These read documents, so they live inside this match, where `database` is bound.
+    function isAdmin() {
+      return hasVerifiedEmail() && exists(/databases/$(database)/documents/adminUsers/$(adminEmail()));
+    }
+
+    function adminBrigadeIds() {
+      return get(/databases/$(database)/documents/adminUsers/$(adminEmail())).data.brigadeIds;
+    }
+
+    function isBrigadeAdmin(slug) {
+      return isSuperadmin() || (isAdmin()
+        && get(/databases/$(database)/documents/brigades/$(slug)).data.brigadeId in adminBrigadeIds());
+    }
+
     match /brigades/{slug} {
       allow get: if true;
-      allow list: if isSuperadmin();
+      allow list: if isSuperadmin() || (isAdmin() && resource.data.brigadeId in adminBrigadeIds());
       allow write: if false;
 
       match /private/settings {
@@ -65,7 +89,7 @@ service cloud.firestore {
 
       match /checks/{checkId} {
         allow get: if true;
-        allow list: if isSuperadmin() || resource.data.scheduledDate >= firstOfPreviousMonth();
+        allow list: if isSuperadmin() || resource.data.scheduledDate >= firstOfPreviousMonth() || isBrigadeAdmin(slug);
         allow delete: if false;
 
         allow create: if validCheckWrite(checkId, {})
@@ -79,6 +103,13 @@ service cloud.firestore {
             || request.resource.data.checkSheetVersion
               <= get(/databases/$(database)/documents/brigades/$(slug)/appliances/$(request.resource.data.applianceId)).data.currentCheckSheetVersion);
       }
+    }
+
+    match /adminUsers/{email} {
+      allow get: if isSuperadmin() || (hasVerifiedEmail() && email == adminEmail());
+      allow list: if isSuperadmin();
+      allow create, update: if isSuperadmin() && email == email.lower() && request.resource.data.email == email;
+      allow delete: if isSuperadmin();
     }
   }
 }

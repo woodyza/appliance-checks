@@ -71,6 +71,26 @@ Firebase Auth's email-link sign-in is capped at 5 emails/day project-wide on the
 
 App Check enforcement can take up to 15 minutes to take effect after `make provision` finishes, so wait before relying on it (e.g. before `make e2e ENV=dev` or checking the site in a browser).
 
+### Checking account pre-hijacking on `dev`
+
+ADR 0005 accepts the risk that signing up with an admin's address and a password, before that admin ever signs in, shares the admin's account afterwards — verified in the Auth emulator, but production Firebase may behave differently (e.g. by clearing the password on a later email-link sign-in). To check for real, against `dev`:
+
+1. Sign up a spare address by REST, using `VITE_FIREBASE_API_KEY` from `.env.dev`:
+   ```bash
+   curl -X POST "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=<VITE_FIREBASE_API_KEY>" \
+     -H 'Content-Type: application/json' -d '{"email":"<spare address>","password":"<a password>","returnSecureToken":true}'
+   ```
+   If App Check on Auth rejects this (it's enforced per `make provision`), that's part of the answer already: an attacker can't sign up this way at all.
+2. Otherwise, sign in at `/admin/sign-in` with that same address (by link) to simulate the admin's real first sign-in.
+3. Sign in again by REST with the password, and decode the returned `idToken` with any JWT decoder:
+   ```bash
+   curl -X POST "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=<VITE_FIREBASE_API_KEY>" \
+     -H 'Content-Type: application/json' -d '{"email":"<spare address>","password":"<a password>","returnSecureToken":true}'
+   ```
+   If it succeeds (the token will say `email_verified: true`), production behaves like the emulator and the risk is real there too. If it fails with invalid credentials, production cleared the password on the email-link sign-in, and the ADR overstates the risk.
+
+Mind the Spark plan's 5 sign-in emails/day limit (above) — this uses one.
+
 ## 4. Deploy and load data
 
 ```bash

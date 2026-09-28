@@ -11,6 +11,9 @@ A volunteer fire brigade that owns one or more appliances and runs Checks on the
 The unguessable short URL that opens the app for one brigade, usually reached via an appliance's QR code. Through it, the app looks dedicated to that brigade alone.
 _Avoid_: Brigade URL, brigade key
 
+**Superadmin**:
+The Firebase project owner, who adds and removes Brigade Admins and VSOs, and can administer any brigade.
+
 **Brigade Admin**:
 A person who administers exactly one brigade, e.g. its Check Sheets and Monthly Reports.
 
@@ -18,7 +21,7 @@ A person who administers exactly one brigade, e.g. its Check Sheets and Monthly 
 Volunteer Support Officer: a member of a regional team who administers their assigned brigades with the same powers as a Brigade Admin. The VSO team covers the region together.
 
 **Report Email**:
-The address a brigade's reports go to. It can be a shared VSO team address and defaults to the brigade's assigned VSO when it isn't set.
+The address a brigade's reports go to, often a shared VSO team address.
 
 ## Appliances
 

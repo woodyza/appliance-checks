@@ -9,6 +9,7 @@ import { newId } from '../../src/domain/slug'
 let testEnv: RulesTestEnvironment
 
 const BRIGADE_PATH = 'brigades/abc123'
+const OTHER_BRIGADE_PATH = 'brigades/def456'
 const SETTINGS_PATH = `${BRIGADE_PATH}/private/settings`
 const APPLIANCE_PATH = `${BRIGADE_PATH}/appliances/8011`
 const APPLIANCE_8012_PATH = `${BRIGADE_PATH}/appliances/8012`
@@ -38,6 +39,23 @@ function superadminDb(): firebase.firestore.Firestore {
 
 function otherUserDb(): firebase.firestore.Firestore {
   return testEnv.authenticatedContext('some-other-uid').firestore()
+}
+
+function adminDb(email: string, verified = true): firebase.firestore.Firestore {
+  return testEnv.authenticatedContext(email, { email, email_verified: verified }).firestore()
+}
+
+function oldChecksList(
+  db: firebase.firestore.Firestore,
+  brigadePath: string,
+): Promise<firebase.firestore.QuerySnapshot> {
+  return db
+    .collection(`${brigadePath}/checks`)
+    .where('applianceId', '==', '8011')
+    .where('scheduledDate', '>=', '2000-01-01')
+    .where('scheduledDate', '<', firstOfPreviousMonth(TODAY))
+    .orderBy('scheduledDate')
+    .get()
 }
 
 function checkData(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -82,6 +100,21 @@ beforeAll(async () => {
       checkSheetVersion: 1,
       responses: {},
       updatedAt: new Date(),
+    })
+    await db.doc(OTHER_BRIGADE_PATH).set({ brigadeId: 'b2', name: 'Other Brigade', checkDay: 1, active: true })
+    await db.doc('adminUsers/jo@example.com').set({
+      email: 'jo@example.com',
+      displayName: null,
+      role: 'brigadeAdmin',
+      brigadeIds: ['b1'],
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    })
+    await db.doc('adminUsers/sam@example.com').set({
+      email: 'sam@example.com',
+      displayName: null,
+      role: 'vso',
+      brigadeIds: ['b2'],
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     })
   })
 })
@@ -379,15 +412,7 @@ describe('superadmin', () => {
   })
 
   it('allows a checks list bounded before firstOfPreviousMonth', async () => {
-    await assertSucceeds(
-      superadminDb()
-        .collection(`${BRIGADE_PATH}/checks`)
-        .where('applianceId', '==', '8011')
-        .where('scheduledDate', '>=', '2000-01-01')
-        .where('scheduledDate', '<', firstOfPreviousMonth(TODAY))
-        .orderBy('scheduledDate')
-        .get(),
-    )
+    await assertSucceeds(oldChecksList(superadminDb(), BRIGADE_PATH))
   })
 
   it('allows getting an old Check', async () => {
@@ -409,14 +434,86 @@ describe('another signed-in user', () => {
   })
 
   it('denies a checks list bounded before firstOfPreviousMonth', async () => {
-    await assertFails(
-      otherUserDb()
-        .collection(`${BRIGADE_PATH}/checks`)
-        .where('applianceId', '==', '8011')
-        .where('scheduledDate', '>=', '2000-01-01')
-        .where('scheduledDate', '<', firstOfPreviousMonth(TODAY))
-        .orderBy('scheduledDate')
-        .get(),
+    await assertFails(oldChecksList(otherUserDb(), BRIGADE_PATH))
+  })
+})
+
+describe('admin users', () => {
+  it("allows a mixed-case token email to get its own lower-cased doc", async () => {
+    await assertSucceeds(adminDb('Jo@Example.com').doc('adminUsers/jo@example.com').get())
+  })
+
+  it('denies get when the token email is unverified', async () => {
+    await assertFails(adminDb('jo@example.com', false).doc('adminUsers/jo@example.com').get())
+  })
+
+  it("denies one admin getting another admin's doc", async () => {
+    await assertFails(adminDb('sam@example.com').doc('adminUsers/jo@example.com').get())
+  })
+
+  it('allows the superadmin to get and list adminUsers, denies an admin listing them', async () => {
+    await assertSucceeds(superadminDb().doc('adminUsers/jo@example.com').get())
+    await assertSucceeds(superadminDb().collection('adminUsers').get())
+    await assertFails(adminDb('jo@example.com').collection('adminUsers').get())
+  })
+
+  it('allows the superadmin to create and then delete an adminUsers doc', async () => {
+    const ref = superadminDb().doc('adminUsers/new@example.com')
+    await assertSucceeds(
+      ref.set({ email: 'new@example.com', displayName: null, role: 'vso', brigadeIds: ['b1'] }),
     )
+    await assertSucceeds(ref.delete())
+  })
+
+  it('denies a create whose doc id is not already lower-case', async () => {
+    await assertFails(
+      superadminDb()
+        .doc('adminUsers/New@example.com')
+        .set({ email: 'New@example.com', displayName: null, role: 'vso', brigadeIds: ['b1'] }),
+    )
+  })
+
+  it("denies a create whose email field doesn't match the doc id", async () => {
+    await assertFails(
+      superadminDb()
+        .doc('adminUsers/new2@example.com')
+        .set({ email: 'other@example.com', displayName: null, role: 'vso', brigadeIds: ['b1'] }),
+    )
+  })
+
+  it('denies an admin updating their own doc', async () => {
+    await assertFails(
+      adminDb('jo@example.com')
+        .doc('adminUsers/jo@example.com')
+        .set({ brigadeIds: ['b1', 'b2'] }, { merge: true }),
+    )
+  })
+})
+
+describe('brigade admin', () => {
+  it("allows an old-bounded checks list for the admin's assigned brigade", async () => {
+    await assertSucceeds(oldChecksList(adminDb('jo@example.com'), BRIGADE_PATH))
+  })
+
+  it('denies an old-bounded checks list for an unassigned brigade', async () => {
+    await assertFails(oldChecksList(adminDb('jo@example.com'), OTHER_BRIGADE_PATH))
+  })
+
+  it('denies an old-bounded checks list when the token email is unverified', async () => {
+    await assertFails(oldChecksList(adminDb('jo@example.com', false), BRIGADE_PATH))
+  })
+
+  it("allows a brigades list bounded to the admin's own brigadeId", async () => {
+    await assertSucceeds(adminDb('jo@example.com').collection('brigades').where('brigadeId', 'in', ['b1']).get())
+  })
+
+  it('denies a brigades list that includes an unassigned brigadeId', async () => {
+    await assertFails(
+      adminDb('jo@example.com').collection('brigades').where('brigadeId', 'in', ['b1', 'b2']).get(),
+    )
+  })
+
+  it('denies an unfiltered brigades list', async () => {
+    await assertFails(adminDb('jo@example.com').collection('brigades').get())
   })
 })
