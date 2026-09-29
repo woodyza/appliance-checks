@@ -7,6 +7,8 @@ defineProps<{
   loading: boolean
   notAuthorised: boolean
   error: string | null
+  up?: { to: string; label: string }
+  showSignOut?: boolean
 }>()
 
 const router = useRouter()
@@ -20,12 +22,20 @@ async function handleSignOut(): Promise<void> {
 <template>
   <div id="app">
     <header>
+      <router-link
+        v-if="up"
+        :to="up.to"
+        class="header-back header-up"
+      >
+        {{ up.label }}
+      </router-link>
       <div class="header-titles">
         <div class="header-callsign">
           {{ title }}
         </div>
       </div>
       <button
+        v-if="showSignOut"
         class="header-back"
         @click="handleSignOut"
       >

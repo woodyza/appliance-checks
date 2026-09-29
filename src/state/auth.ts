@@ -74,6 +74,14 @@ export async function completeSignIn(email: string, url: string): Promise<User> 
   return credential.user
 }
 
+// Clears `currentUser` straight away, for the same reason `completeSignIn` sets it: a caller
+// that navigates to `/admin/sign-in` next mustn't be redirected back by the signed-in guard.
 export async function signOut(): Promise<void> {
   await firebaseSignOut(auth)
+  currentUser.value = null
+}
+
+/** Where a signed-in person's admin screens start. The hub for now; role-aware in #12. */
+export function adminHome(): string {
+  return '/admin'
 }

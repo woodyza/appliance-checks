@@ -9,7 +9,7 @@ This slice builds the full data model and Firestore rules for all three roles, b
 Deferred to #12:
 
 - Redirecting a signed-in Brigade Admin straight to their brigade landing page, and a VSO's own hub scoped to their assigned brigades only
-- The brigade landing page's "Admin" link becoming role-aware (right now it just checks "is anyone signed in"; see Notes for #12)
+- The brigade landing page's "‹ Brigades" and "Manage" links becoming role-aware (right now it just checks "is anyone signed in"; see Notes for #12)
 - Any post-sign-in routing beyond "always land on `/admin`"
 
 Building the rules correctly for all three roles now, rather than superadmin-only, means the follow-up doesn't need to touch `firestore.rules` again. The rules tests below are what back that up, since no UI in this slice exercises the admin paths.
@@ -87,8 +87,38 @@ function isBrigadeAdmin(slug) {
 - `/admin` — a new `AdminHub.vue` (`ReportView.vue`'s picker moves to `/:slug/admin`): a list of brigades, inactive ones marked, (each linking to its `/:slug` brigade landing page) plus a "User admin" link. Gated exactly as today: attempt `listBrigades()` (an unbounded `list`, superadmin-only); `permission-denied` shows the existing "Not authorised" screen.
 - `/admin/users` — new `UserAdminView.vue`, the User Admin page. Same gate.
 - `/:slug/admin` — `BrigadeAdminView.vue` (renamed from `ReportView.vue`); its static `admin` segment outranks `/:slug/:applianceId`. This is the old `ReportView` picker with the brigade `<select>` removed and `slug` taken from the route instead: pick an appliance and month, then Download. Same gate as above (a `listBrigades()` probe), which #12 replaces with a role-aware one. The three pages share the gate and its loading/"Not authorised"/error screens.
-- `ApplianceList.vue` (the brigade landing page) gets an "Admin" link to `/:slug/admin`, shown whenever `currentUser` is signed in — deliberately not checking anything more specific, to avoid adding a Firestore read to every anonymous page view. A signed-in-but-unauthorised person can click through and land on the same safe "Not authorised" screen.
-- **Inactive brigades.** Today `ApplianceList.vue` and `checkSession.ts` both show "This link isn't valid." for an inactive brigade, which would leave its `/:slug/admin` unreachable from the hub. Instead, an inactive brigade's landing page loads its name, the "Admin" link and a "Checks are disabled for this brigade." notice in place of the appliance links. `checkSession.ts` shows the same notice for a direct link to an appliance. A missing brigade still shows "This link isn't valid.". The Check write rules are unchanged: they don't read `active` today, and a stale link to an inactive brigade is no more exposed than a live one (ADR 0001).
+- `ApplianceList.vue` (the brigade landing page) gets a "Manage" link to `/:slug/admin` and a "‹ Brigades" link to the hub, both shown whenever `currentUser` is signed in — deliberately not checking anything more specific, to avoid adding a Firestore read to every anonymous page view. A signed-in-but-unauthorised person can click through and land on the same safe "Not authorised" screen.
+- **Inactive brigades.** Today `ApplianceList.vue` and `checkSession.ts` both show "This link isn't valid." for an inactive brigade, which would leave its `/:slug/admin` unreachable from the hub. Instead, an inactive brigade's landing page loads its name, its links and a "Checks are disabled for this brigade." notice in place of the appliance links. `checkSession.ts` shows the same notice for a direct link to an appliance. A missing brigade still shows "This link isn't valid.". The Check write rules are unchanged: they don't read `active` today, and a stale link to an inactive brigade is no more exposed than a live one (ADR 0001).
+
+**Navigating between screens.** In the header, the left button always goes *up* to the parent screen (a link, not history back) and is named after it; the right button is the page's action. Sign out lives only on the admin home. Every admin screen is then at most two taps from the hub:
+
+```
+                       /  (Landing)
+                       │ signed out: "Admin sign-in" → /admin/sign-in
+                       │ signed in:  "Admin"         → admin home
+                       ▼
+ /admin/sign-in ── already signed in (not a sign-in link) ──▶ admin home
+                ── link completes ──────────────────────────▶ admin home
+
+ admin home: /admin (Hub, title "Admin")          [right: Sign out]
+   ├─ "User admin" ──▶ /admin/users               [left: ‹ Admin → /admin]
+   └─ brigade card ──▶ /:slug (title: brigade)    [left: ‹ Brigades → /admin, signed in only]
+                        │                         [right: Manage → /:slug/admin, signed in only]
+                        ├──▶ /:slug/admin         [left: ‹ Appliances → /:slug]
+                        └──▶ /:slug/:appliance    [left: Switch → /:slug] (unchanged)
+                               └─ Section         [left: Back → Section list] (unchanged)
+```
+
+An anonymous visitor to a Brigade Link sees neither link, so the app still looks dedicated to that brigade. "Admin home" is one function (`adminHome()`, always `/admin` in this slice) used by the landing page, sign-in and the sign-in redirect, so #12 can make it role-aware without touching those screens:
+
+```
+ role            admin home          hub contents                /:slug left link
+ Superadmin      /admin              User admin + all brigades   ‹ Brigades → /admin
+ VSO             /admin              their brigades only         ‹ Brigades → /admin
+ Brigade Admin   /:slug/admin        (no hub)                    none; Sign out moves to /:slug/admin
+```
+
+Up links push a history entry, so the phone's back button retraces taps rather than walking up the tree.
 
 Accepted constraint: `/:slug/admin` as a static path segment shadows an appliance literally id'd `"admin"`. Appliance ids are assigned via the CLI, so this is worth a one-line warning rather than any code.
 
@@ -98,7 +128,7 @@ A card per existing Brigade Admin or VSO (the app is phone-first) — email, dis
 
 ## Notes for #12
 
-- **Role-aware "Admin" link.** The landing page reads the signed-in user's own `adminUsers/{email}` (the self `get` rule) and shows the link when its `brigadeIds` include the brigade's `brigadeId`, which `ApplianceList.vue` already loads. Check `brigadeIds`, not `role`, since Brigade Admins need it too. The rules still decide access; this is only whether to show the link.
+- **Role-aware "Manage" and "‹ Brigades" links.** The landing page reads the signed-in user's own `adminUsers/{email}` (the self `get` rule) and shows "Manage" when its `brigadeIds` include the brigade's `brigadeId`, which `ApplianceList.vue` already loads. Check `brigadeIds`, not `role`, since Brigade Admins need it too. The rules still decide access; this is only whether to show the link.
 - **The superadmin has no doc**, so that read comes back not-found for them, the same as for a stranger. Either keep a `limit(1)` `brigades` list probe for the superadmin, or give the superadmin an `adminUsers` doc as a Brigade Admin of their own brigade (`isSuperadmin()` still covers the rest). The second seems neater, since in practice the superadmin mostly works in one brigade.
 
 ## Testing
@@ -108,7 +138,7 @@ A card per existing Brigade Admin or VSO (the app is phone-first) — email, dis
   - `isBrigadeAdmin`: an old-Checks list allowed for an admin's assigned brigade, denied for an unassigned one, and denied for an assigned admin whose token has `email_verified: false`.
   - `brigades` list, as an admin assigned to `A`: `where('brigadeId', 'in', ['A'])` allowed; `where('brigadeId', 'in', ['A', 'B'])` with `B` unassigned denied; an unfiltered list denied.
 - Unit tests for the User Admin form's validation (`src/domain/adminUser.ts`): email normalisation and the brigade count per role, since the form is the only thing enforcing "exactly one brigade". The `admin.ts`/`auth.ts`-style data and auth wrappers stay thin and untested directly, consistent with how #6 treated them.
-- E2E: the existing "downloads a Monthly Report" and "not authorised" specs drive through `/admin`'s brigade/appliance/month picker directly — that picker moves to `/:slug/admin`, so both specs get restructured to navigate hub → brigade landing page → Admin link first. The inactive brigade gets specs for its landing page and a direct appliance link (anonymous), and for reaching its `/:slug/admin` from the hub (signed in). The User Admin flow gets one spec: add (with a padded, mixed-case email), refuse a duplicate, edit, remove.
+- E2E: the existing "downloads a Monthly Report" and "not authorised" specs drive through `/admin`'s brigade/appliance/month picker directly — that picker moves to `/:slug/admin`, so both specs get restructured to navigate hub → brigade landing page → Manage first. A spec walks every up link, the landing page's "Admin" link, the sign-in redirect and Sign out. The inactive brigade gets specs for its landing page and a direct appliance link (anonymous), and for reaching its `/:slug/admin` from the hub (signed in). The User Admin flow gets one spec: add (with a padded, mixed-case email), refuse a duplicate, edit, remove.
 
 ## Doc changes
 
@@ -131,4 +161,5 @@ Spark allows 5 sign-in emails a day, project-wide (Blaze allows 25,000). Fine fo
 - **Rules helpers that read documents sit inside the `documents` match**, and token claims are read with `get()`. At `service` level `$(database)` isn't bound and the request fails; the implementer first worked round it by inlining the lookups, and that was reverted to the designed helpers.
 - **`ReportView.vue` became `BrigadeAdminView.vue`**, and the hub is a new page, rather than repurposing `ReportView.vue` as the hub.
 - **Users are cards, not a table**, and the form's validation got unit tests (see Testing). Both are how-level; the User Admin CRUD also got an e2e spec where this design leaned manual.
+- **Up navigation added after the PR opened.** The first cut had no way back out of the admin screens except the browser's back button, and `/` always sent a signed-in person to sign in again. The scheme above (up links, Sign out on the hub only, `adminHome()`, the sign-in redirect) was added in review. "Request another link" on the sign-in error screen now signs out first, since the redirect would otherwise send someone still signed in back to their old account.
 - **Review follow-up not applied:** if a brigade doc were ever removed, its `brigadeId` would stay on an admin but be invisible in the form's picker (and kept on save). No tooling removes brigades yet, so it's left for when something does.

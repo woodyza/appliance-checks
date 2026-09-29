@@ -34,6 +34,13 @@ onMounted(async () => {
 <template>
   <div id="app">
     <header>
+      <router-link
+        v-if="currentUser"
+        to="/admin"
+        class="header-back header-up"
+      >
+        ‹ Brigades
+      </router-link>
       <div class="header-titles">
         <div class="header-callsign">
           {{ brigade?.name ?? 'Appliance Checks' }}
@@ -42,9 +49,9 @@ onMounted(async () => {
       <router-link
         v-if="currentUser && brigade"
         :to="`/${slug}/admin`"
-        class="header-back"
+        class="header-back header-manage"
       >
-        Admin
+        Manage
       </router-link>
     </header>
 

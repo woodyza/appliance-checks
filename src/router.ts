@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { SLUG_PATTERN } from './domain/slug'
-import { authReady, currentUser } from './state/auth'
+import { adminHome, authReady, currentUser, isSignInLink } from './state/auth'
 import AdminHub from './views/admin/AdminHub.vue'
 import BrigadeAdminView from './views/admin/BrigadeAdminView.vue'
 import SignIn from './views/admin/SignIn.vue'
@@ -19,7 +19,7 @@ export const router = createRouter({
     { path: '/', component: Landing },
     // Explicit `/admin` routes go before the slug routes, even though `admin` can't match the
     // 6-char slug pattern anyway.
-    { path: '/admin/sign-in', component: SignIn },
+    { path: '/admin/sign-in', component: SignIn, meta: { redirectIfSignedIn: true } },
     { path: '/admin', component: AdminHub, meta: { requiresAuth: true } },
     { path: '/admin/users', component: UserAdminView, meta: { requiresAuth: true } },
     { path: `/:slug(${SLUG_PATTERN})`, component: ApplianceList, sensitive: true },
@@ -51,6 +51,12 @@ export const router = createRouter({
 router.beforeEach(async (to) => {
   const slug = to.params.slug
   if (typeof slug === 'string' && !SLUG_REGEX.test(slug)) return '/'
+
+  // A sign-in link still goes through, so someone signed in can switch accounts.
+  if (to.meta.redirectIfSignedIn) {
+    await authReady()
+    if (currentUser.value && !isSignInLink(new URL(to.fullPath, window.location.origin).href)) return adminHome()
+  }
 
   if (to.meta.requiresAuth) {
     // Waits only for the first `onAuthStateChanged` result (a signed-in device's session

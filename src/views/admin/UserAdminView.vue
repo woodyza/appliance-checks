@@ -156,6 +156,7 @@ async function remove(): Promise<void> {
 <template>
   <AdminFrame
     title="User admin"
+    :up="{ to: '/admin', label: '‹ Admin' }"
     :loading="gate.loading.value || usersLoading"
     :not-authorised="gate.notAuthorised.value"
     :error="gate.error.value ?? usersError"

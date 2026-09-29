@@ -51,7 +51,7 @@ Env files: `.env.development` is committed (emulator config). `.env.dev` / `.env
 
 ## Admin sign-in
 
-`/admin/sign-in` (passwordless email link) leads to `/admin` (a hub: "User admin" plus a link per brigade), `/admin/users` (add, edit and remove Brigade Admins and VSOs) and `/:slug/admin` (pick an appliance and month, then download a Monthly Report PDF; reached from a brigade's landing page via its "Admin" link). All three are still superadmin-only in the UI for now (the `listBrigades()` gate in `src/state/adminGate.ts`), though `firestore.rules` already grants Brigade Admins and VSOs read access to their own brigades — role-aware navigation lands in #12. `src/state/auth.ts` wraps Firebase Auth; `src/data/admin.ts` reads brigades, admin users and a month's Checks; `src/report/pdf.ts` renders the PDF (jsPDF + jspdf-autotable, lazy-loaded).
+`/admin/sign-in` (passwordless email link) leads to `/admin` (a hub: "User admin" plus a link per brigade), `/admin/users` (add, edit and remove Brigade Admins and VSOs) and `/:slug/admin` (pick an appliance and month, then download a Monthly Report PDF; reached from a brigade's landing page via "Manage"). Each admin screen's left header button goes up to its parent, and Sign out is on the hub. All three are still superadmin-only in the UI for now (the `listBrigades()` gate in `src/state/adminGate.ts`), though `firestore.rules` already grants Brigade Admins and VSOs read access to their own brigades — role-aware navigation lands in #12. `src/state/auth.ts` wraps Firebase Auth; `src/data/admin.ts` reads brigades, admin users and a month's Checks; `src/report/pdf.ts` renders the PDF (jsPDF + jspdf-autotable, lazy-loaded).
 
 ## `make` targets
 

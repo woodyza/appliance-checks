@@ -1,7 +1,19 @@
+<script setup lang="ts">
+import { adminHome, currentUser } from '../state/auth'
+</script>
+
 <template>
   <div class="landing">
     <p>Scan the QR code on your appliance to start a Check.</p>
     <router-link
+      v-if="currentUser"
+      class="retry-btn"
+      :to="adminHome()"
+    >
+      Admin
+    </router-link>
+    <router-link
+      v-else
       class="retry-btn"
       to="/admin/sign-in"
     >

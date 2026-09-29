@@ -20,6 +20,24 @@ export async function latestSignInLink(email: string): Promise<string> {
   return latest.oobLink
 }
 
+// Requests a link without going through `/admin/sign-in`, which redirects someone already signed in.
+export async function requestSignInLink(email: string): Promise<string> {
+  await fetch(
+    `http://${AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=demo-api-key`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requestType: 'EMAIL_SIGNIN',
+        email,
+        continueUrl: 'http://localhost:5173/admin/sign-in',
+        canHandleCodeInApp: true,
+      }),
+    },
+  )
+  return latestSignInLink(email)
+}
+
 export async function signIn(page: Page, email: string): Promise<void> {
   await page.goto('/admin/sign-in')
   await page.locator('input[type=email]').fill(email)

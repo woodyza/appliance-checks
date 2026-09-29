@@ -109,6 +109,7 @@ async function download(): Promise<void> {
 <template>
   <AdminFrame
     :title="brigadeSummary?.brigade.name ?? 'Monthly Report'"
+    :up="{ to: `/${slug}`, label: '‹ Appliances' }"
     :loading="gate.loading.value"
     :not-authorised="gate.notAuthorised.value"
     :error="frameError"

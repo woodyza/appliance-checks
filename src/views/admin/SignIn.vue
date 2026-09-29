@@ -1,7 +1,17 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { authErrorMessage, clearStoredEmail, completeSignIn, isSignInLink, sendLink, storedEmail } from '../../state/auth'
+import {
+  adminHome,
+  authErrorMessage,
+  clearStoredEmail,
+  completeSignIn,
+  currentUser,
+  isSignInLink,
+  sendLink,
+  signOut,
+  storedEmail,
+} from '../../state/auth'
 
 type Stage = 'loading' | 'enterEmail' | 'linkSent' | 'confirmEmail' | 'error'
 
@@ -13,7 +23,7 @@ const errorMessage = ref('')
 async function completeFromLink(knownEmail: string): Promise<void> {
   try {
     await completeSignIn(knownEmail, window.location.href)
-    await router.replace('/admin')
+    await router.replace(adminHome())
   } catch (error) {
     clearStoredEmail()
     // A later request on this device overwrote the stored email, so ask for the one this link is for.
@@ -51,7 +61,10 @@ async function requestLink(): Promise<void> {
   }
 }
 
+// Signs out first: someone still signed in after a failed link would otherwise be redirected to
+// their old account's admin home instead of getting the email form.
 async function requestAnother(): Promise<void> {
+  if (currentUser.value) await signOut()
   await router.replace('/admin/sign-in')
   stage.value = 'enterEmail'
 }
