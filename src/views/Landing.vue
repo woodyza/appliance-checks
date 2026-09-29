@@ -4,7 +4,7 @@ import { adminHome, currentUser } from '../state/auth'
 
 <template>
   <div class="landing">
-    <p>Scan the QR code on your appliance to start a Check.</p>
+    <p>Scan the QR code for your brigade to start a Check</p>
     <router-link
       v-if="currentUser"
       class="retry-btn"
