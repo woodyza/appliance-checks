@@ -1,3 +1,4 @@
+import { deepEqual } from '../deepEqual'
 import { newId } from '../slug'
 import type { Item, ParsedCheckSheet, ParsedItem, Section } from '../types'
 import { normalise } from './normalise'
@@ -31,22 +32,6 @@ export interface ReconcileResult {
   sections: Section[]
   report: ImportReport
   unchanged: boolean
-}
-
-function deepEqual(a: unknown, b: unknown): boolean {
-  if (a === b) return true
-  if (Array.isArray(a) || Array.isArray(b)) {
-    return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((v, i) => deepEqual(v, b[i]))
-  }
-  if (typeof a === 'object' && a !== null && typeof b === 'object' && b !== null) {
-    const aKeys = Object.keys(a)
-    const bKeys = Object.keys(b)
-    if (aKeys.length !== bKeys.length) return false
-    return aKeys.every((key) =>
-      deepEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]),
-    )
-  }
-  return false
 }
 
 const ITEM_FIELDS: (keyof ParsedItem)[] = ['label', 'qty', 'inputType', 'options', 'scope']

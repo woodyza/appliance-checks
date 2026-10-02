@@ -3,6 +3,7 @@ import { computed, inject, onMounted, watch, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { CHECK_SESSION_KEY, REFRESH_FAILURE_MESSAGE } from '../state/checkSession'
 import WrittenInput from '../components/WrittenInput.vue'
+import { answerFits } from '../domain/check'
 import type { Item } from '../domain/types'
 
 const session = inject(CHECK_SESSION_KEY)!
@@ -47,8 +48,13 @@ function isBlocked(item: Item): boolean {
   return isPending(item) || !session.ready.value
 }
 
+function shown(item: Item): string | undefined {
+  const response = session.responses.value[item.id]
+  return answerFits(item, response) ? response : undefined
+}
+
 function answerYN(item: Item, value: 'Y' | 'N'): void {
-  const current = session.responses.value[item.id]
+  const current = shown(item)
   void session.answer(item.id, current === value ? null : value)
 }
 
@@ -146,7 +152,7 @@ watchEffect(() => {
           <button
             :class="[
               'yn-btn',
-              session.responses.value[item.id] === 'Y' ? 'y-active' : '',
+              shown(item) === 'Y' ? 'y-active' : '',
               isBlocked(item) ? 'saving' : '',
             ]"
             @click="answerYN(item, 'Y')"
@@ -156,7 +162,7 @@ watchEffect(() => {
           <button
             :class="[
               'yn-btn',
-              session.responses.value[item.id] === 'N' ? 'n-active' : '',
+              shown(item) === 'N' ? 'n-active' : '',
               isBlocked(item) ? 'saving' : '',
             ]"
             @click="answerYN(item, 'N')"
@@ -169,7 +175,7 @@ watchEffect(() => {
       <select
         v-else-if="item.inputType === 'choice'"
         :class="['item-select', isBlocked(item) ? 'saving' : '']"
-        :value="session.responses.value[item.id] ?? ''"
+        :value="shown(item) ?? ''"
         @change="answerChoice(item, $event)"
       >
         <option value="">
@@ -189,12 +195,12 @@ watchEffect(() => {
         class="text-input-wrap"
       >
         <WrittenInput
-          :value="session.responses.value[item.id] ?? ''"
+          :value="shown(item) ?? ''"
           :blocked="isBlocked(item)"
           @commit="(value) => answerWritten(item, value)"
         />
         <button
-          v-if="!session.responses.value[item.id] && previousValueDisplay(item)"
+          v-if="!shown(item) && previousValueDisplay(item)"
           :class="['copy-prev-btn', isBlocked(item) ? 'saving' : '']"
           @click="copyPrevious(item)"
         >

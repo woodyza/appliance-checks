@@ -205,6 +205,31 @@ describe('cells', () => {
   })
 })
 
+describe('cells for answers that no longer fit', () => {
+  function reportWith(sheet: CheckSheetVersion, responses: Record<string, string>): MonthlyReport {
+    return buildMonthlyReport({
+      brigade: brigade(),
+      appliance: appliance(),
+      month: '2026-08',
+      checks: [check({ scheduledDate: '2026-08-03', checkSheetVersion: 2, responses })],
+      versions: new Map(),
+      currentVersion: sheet,
+      today: '2026-08-04',
+    })
+  }
+
+  it('blanks a Choice answer that is not among the Item options', () => {
+    const sheet = v2()
+    sheet.sections[0].items[3] = { id: FUEL, label: 'Fuel', qty: null, inputType: 'choice', options: ['Full', 'Half'], scope: 'weekly' }
+
+    expect(cellAt(reportWith(sheet, { [FUEL]: '¾' }), 'section-a', FUEL, '2026-08-03')).toEqual({ kind: 'value', value: null })
+  })
+
+  it('shows Y as the value of a Written Item', () => {
+    expect(cellAt(reportWith(v2(), { [REGO]: 'Y' }), 'section-a', REGO, '2026-08-03')).toEqual({ kind: 'value', value: 'Y' })
+  })
+})
+
 describe('columns', () => {
   it('renders a missing column as 0% with empty cells against the base version, not na', () => {
     const report = augustReport()

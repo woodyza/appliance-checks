@@ -5,7 +5,7 @@ import { type ImportReport, reconcile } from '../src/domain/import/reconcile'
 import { resolveSpreadsheetId } from '../src/domain/import/source'
 import type { Item, Section } from '../src/domain/types'
 import { ask } from './lib/prompt'
-import { getCurrentVersion, writeVersion } from './lib/store'
+import { getCurrentVersion, hasCheckSheetDraft, writeVersion } from './lib/store'
 import { parseProjectTarget, resolveTarget } from './lib/target'
 
 function describe(item: Item | undefined): string {
@@ -78,6 +78,12 @@ async function main(): Promise<void> {
   }
   if (unchanged) {
     console.log('Content unchanged, but the source spreadsheet differs from the current version.')
+  }
+
+  if (await hasCheckSheetDraft(db, values.brigade, values.appliance)) {
+    console.log(
+      "Note: this appliance has unpublished edits in the admin UI. Publishing them will be refused after this import; they'll need discarding.",
+    )
   }
 
   if (values['dry-run']) {

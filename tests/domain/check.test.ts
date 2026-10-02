@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  answerFits,
   defaultCheckDate,
   isComplete,
   isFrozen,
@@ -55,6 +56,24 @@ function version(overrides: Partial<CheckSheetVersion> = {}): CheckSheetVersion 
   return { version: 1, createdAt: new Date(), origin: { type: 'editor' }, sections: sections(), ...overrides }
 }
 
+describe('answerFits', () => {
+  const choice = item({ inputType: 'choice', options: ['Full', '¾'] })
+
+  it.each([
+    ['Y/N accepts Y', item(), 'Y', true],
+    ['Y/N accepts N', item(), 'N', true],
+    ['Y/N rejects other text', item(), 'Full', false],
+    ['Y/N rejects undefined', item(), undefined, false],
+    ['Choice accepts an option', choice, '¾', true],
+    ['Choice rejects a non-option', choice, '½', false],
+    ['Written accepts text', item({ inputType: 'written' }), 'Full', true],
+    ['Written accepts Y', item({ inputType: 'written' }), 'Y', true],
+    ['Written rejects empty', item({ inputType: 'written' }), '', false],
+  ])('%s', (_name, subject, value, expected) => {
+    expect(answerFits(subject, value)).toBe(expected)
+  })
+})
+
 describe('sectionProgress', () => {
   it('hides Section B and shows 2 due Items in Section A on a weekly Check', () => {
     const progress = sectionProgress(sections(), {}, false)
@@ -69,6 +88,12 @@ describe('sectionProgress', () => {
 
     expect(progress.map((section) => section.section.title)).toEqual(['Section A', 'Section B'])
     expect(progress[0].due).toHaveLength(3)
+  })
+
+  it("doesn't count an answer that no longer fits its Item", () => {
+    const sheet = [{ id: 's', title: 'S', items: [item({ inputType: 'yn' })] }]
+
+    expect(sectionProgress(sheet, { [TORCH]: 'Full' }, false)[0].answered).toBe(0)
   })
 })
 
@@ -89,6 +114,14 @@ describe('isComplete', () => {
     const responses = { [TORCH]: 'Y', 'stray-id': 'Y' }
 
     expect(isComplete(sections(), responses, false)).toBe(false)
+  })
+})
+
+describe('isComplete and answers that no longer fit', () => {
+  it('is false when the only answer to a due Choice Item is a removed option', () => {
+    const sheet = [{ id: 's', title: 'S', items: [item({ inputType: 'choice', options: ['Full', 'Half'] })] }]
+
+    expect(isComplete(sheet, { [TORCH]: '¾' }, false)).toBe(false)
   })
 })
 

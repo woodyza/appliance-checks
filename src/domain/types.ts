@@ -70,3 +70,9 @@ export interface AdminUser {
   role: AdminRole
   brigadeIds: string[]
 }
+
+export interface CheckSheetDraft {
+  baseVersion: number | null
+  origin: CheckSheetOrigin
+  sections: Section[]
+}
