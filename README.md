@@ -42,10 +42,18 @@ make dev
 Runs the Firestore and Auth emulators, a dev seed and Vite in one terminal (via `concurrently`); Ctrl-C stops them all. Vite serves at `http://localhost:5173` and talks to the emulator (`.env.development`, committed, points at the `demo-appliance-checks` project). There's no local mode that talks to `dev`/`prod`.
 
 - The seed creates a `devtst` brigade the first time (appliances `dev1` and `dev2`, a small Check Sheet and a previous Check to copy from) and prints its links: open `http://localhost:5173/devtst/dev1`. After that it leaves the data alone; `npm run dev:seed -- --reset` rebuilds it while `make dev` is running.
-- The seed also creates the emulator's superadmin Auth user (`e2e-admin@example.com`, UID `emulator-superadmin`, matching `firestore.rules`), so `http://localhost:5173/admin/sign-in` works locally: enter that email and open the link from the Emulator UI's Auth tab.
+- The seed also creates the emulator's superadmin Auth user (`e2e-admin@example.com`, UID `emulator-superadmin`, matching `firestore.rules`). See the local sign-in steps below.
 - Emulator data is exported to `.emulator-data/` (gitignored) on exit and imported on the next start, so your Checks survive restarts. Delete the directory to start from nothing.
 - The Emulator UI (http://127.0.0.1:4000) shows the data.
 - `make e2e` reuses a running `make dev` (the e2e seed only touches its own `e2etst` brigade). `make check` needs port 8080 free, so stop `make dev` first.
+
+To sign in locally while `make dev` is running:
+
+1. Open http://localhost:5173/admin/sign-in.
+2. Enter `e2e-admin@example.com` and click **Send sign-in link**.
+3. Open the generated link from the emulator output in your `make dev` terminal, using the same browser.
+
+There's no password and no real email is sent locally.
 
 Env files: `.env.development` is committed (emulator config). `.env.dev` / `.env.prod` hold the real Firebase web config and reCAPTCHA site key; they're written by `make provision` and gitignored (see [`docs/infra-setup.md`](./docs/infra-setup.md)).
 
