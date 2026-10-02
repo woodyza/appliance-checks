@@ -266,8 +266,12 @@ export function useCheckSession(slug: string, applianceId: string, selected: Ref
     error.value = null
     try {
       const brigadeDoc = await getBrigade(slug)
-      if (!brigadeDoc || !brigadeDoc.active) {
+      if (!brigadeDoc) {
         error.value = "This link isn't valid."
+        return
+      }
+      if (!brigadeDoc.active) {
+        error.value = 'Checks are disabled for this brigade.'
         return
       }
       brigade.value = brigadeDoc

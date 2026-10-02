@@ -14,6 +14,7 @@ import {
 import { adminAuth, parseProjectTarget, resolveTarget } from './lib/target'
 
 const SLUG = 'e2etst'
+const INACTIVE_SLUG = 'e2ezzz'
 
 async function main(): Promise<void> {
   const { values } = parseArgs({ options: { project: { type: 'string' } } })
@@ -43,10 +44,18 @@ async function main(): Promise<void> {
   await writeCheck(db, SLUG, 'e2e3', firstDate, 1, completeResponses(e2e3.ids))
   await writeCheck(db, SLUG, 'e2e3', secondDate, 2, { [e2e3.ids.torch]: 'Y' })
 
+  await writeBrigade(db, {
+    slug: INACTIVE_SLUG,
+    name: 'E2E Inactive Brigade',
+    appliances: [{ id: 'e2ez1', callsign: 'E2E Z1' }],
+    sections,
+    active: false,
+  })
+
   // The Auth emulator only: e2e-seed against `dev` uses a real superadmin (see docs/infra-setup.md).
   if (target === 'emulator') await ensureSuperadminUser(adminAuth())
 
-  console.log(`Seeded brigade "${SLUG}" with appliances e2e1, e2e2, e2e3.`)
+  console.log(`Seeded brigade "${SLUG}" with appliances e2e1, e2e2, e2e3, and inactive brigade "${INACTIVE_SLUG}" with e2ez1.`)
 }
 
 main().catch((error: unknown) => {

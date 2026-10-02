@@ -71,6 +71,25 @@ Firebase Auth's email-link sign-in is capped at 5 emails/day project-wide on the
 
 App Check enforcement can take up to 15 minutes to take effect after `make provision` finishes, so wait before relying on it (e.g. before `make e2e ENV=dev` or checking the site in a browser).
 
+### Checking account pre-hijacking on `dev`
+
+ADR 0005 accepts the risk that signing up with an admin's address and a password, before that admin ever signs in, shares the admin's account afterwards. That's verified in the Auth emulator; production Firebase may behave differently (eg by clearing the password on a later email-link sign-in). To check on `dev`:
+
+```bash
+npm run cli:check-prehijack -- --email <a spare address you can receive>
+```
+
+It confirms the project and account, refuses an address that's an admin or already has an Auth account, then:
+
+1. tries a password sign-up with the API key alone, to see whether App Check on Auth blocks a bare API call
+2. if it does, signs up again with an App Check token from `E2E_APPCHECK_DEBUG_TOKEN` (as a browser on the site would)
+3. waits while you sign in at `/admin/sign-in` by link with that address, in a browser, and checks it landed on the same, now-verified account
+4. signs in with the password again, and reports whether it still works
+
+It deletes the test account at the end, whatever happens. It uses one of the Spark plan's 5 sign-in emails for the day. "Password still works" means the risk is real in production; "password rejected" means production clears the planted password.
+
+What it showed on `dev` (October 2026): App Check rejected the bare API-key sign-up, and after the email-link sign-in the planted password was rejected (`INVALID_LOGIN_CREDENTIALS`). So production doesn't share the emulator's behaviour here (ADR 0005).
+
 ## 4. Deploy and load data
 
 ```bash

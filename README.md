@@ -2,7 +2,7 @@
 
 A brigade's routine checks that each appliance's equipment is present and serviceable, recorded on a phone at the appliance rather than on paper or a spreadsheet. Terminology is defined in [`CONTEXT.md`](./CONTEXT.md).
 
-Each brigade gets an unguessable Brigade Link (`https://<host>/{slug}`), reached almost entirely via QR codes on its appliances. No sign-in is needed to run a Check; editing Check Sheets and other admin tasks require an authenticated Brigade Admin or VSO (not built yet: admin sign-in starts with #6).
+Each brigade gets an unguessable Brigade Link (`https://<host>/{slug}`), reached almost entirely via QR codes on its appliances. No sign-in is needed to run a Check; editing Check Sheets and other admin tasks require an authenticated Brigade Admin or VSO (see [Admin sign-in](#admin-sign-in)).
 
 ## Repository layout
 
@@ -14,7 +14,7 @@ src/
   state/         Vue composables holding reactive session state (checkSession.ts)
   views/         Vue views (one per route)
   components/    shared Vue components
-cli/             admin CLI tools (provision, create-brigade, add-appliance, import-check-sheet, deploy, e2e-seed)
+cli/             admin CLI tools (provision, create-brigade, add-appliance, import-check-sheet, deploy, e2e-seed, check-prehijack)
 tests/
   domain/        unit tests
   rules/         Firestore rules tests (emulator)
@@ -51,7 +51,7 @@ Env files: `.env.development` is committed (emulator config). `.env.dev` / `.env
 
 ## Admin sign-in
 
-`/admin/sign-in` (passwordless email link) and `/admin` (pick a brigade, appliance and month, then download a Monthly Report PDF) are superadmin-only for now (`isSuperadmin()` in `firestore.rules`); Brigade Admin and VSO sign-in land in #2. `src/state/auth.ts` wraps Firebase Auth; `src/data/admin.ts` reads brigades and a month's Checks; `src/report/pdf.ts` renders the PDF (jsPDF + jspdf-autotable, lazy-loaded).
+`/admin/sign-in` (passwordless email link) leads to `/admin` (a hub: "User admin" plus a link per brigade), `/admin/users` (add, edit and remove Brigade Admins and VSOs) and `/:slug/admin` (pick an appliance and month, then download a Monthly Report PDF; reached from a brigade's landing page via "Manage"). Each admin screen's left header button goes up to its parent, and Sign out is on the hub. All three are still superadmin-only in the UI for now (the `listBrigades()` gate in `src/state/adminGate.ts`), though `firestore.rules` already grants Brigade Admins and VSOs read access to their own brigades — role-aware navigation lands in #12. `src/state/auth.ts` wraps Firebase Auth; `src/data/admin.ts` reads brigades, admin users and a month's Checks; `src/report/pdf.ts` renders the PDF (jsPDF + jspdf-autotable, lazy-loaded).
 
 ## `make` targets
 

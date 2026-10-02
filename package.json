@@ -15,6 +15,7 @@
     "cli:add-appliance": "tsx cli/add-appliance.ts",
     "cli:import-check-sheet": "tsx cli/import-check-sheet.ts",
     "cli:deploy": "tsx cli/deploy.ts",
+    "cli:check-prehijack": "tsx cli/check-prehijack.ts",
     "e2e:seed": "tsx cli/e2e-seed.ts"
   },
   "dependencies": {

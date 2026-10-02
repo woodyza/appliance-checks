@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { type ApplianceSummary, getBrigade, listAppliances } from '../data/checks'
 import type { Brigade } from '../domain/types'
+import { currentUser } from '../state/auth'
 
 const route = useRoute()
 const slug = route.params.slug as string
@@ -11,16 +12,17 @@ const brigade = ref<Brigade | null>(null)
 const appliances = ref<ApplianceSummary[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
+const inactive = computed(() => brigade.value !== null && !brigade.value.active)
 
 onMounted(async () => {
   try {
     const [brigadeDoc, applianceList] = await Promise.all([getBrigade(slug), listAppliances(slug)])
-    if (!brigadeDoc || !brigadeDoc.active) {
+    if (!brigadeDoc) {
       error.value = "This link isn't valid."
       return
     }
     brigade.value = brigadeDoc
-    appliances.value = applianceList
+    if (brigadeDoc.active) appliances.value = applianceList
   } catch {
     error.value = 'Could not load this brigade.'
   } finally {
@@ -32,11 +34,25 @@ onMounted(async () => {
 <template>
   <div id="app">
     <header>
+      <router-link
+        v-if="currentUser"
+        to="/admin"
+        class="header-back header-up"
+      >
+        ‹ Brigades
+      </router-link>
       <div class="header-titles">
         <div class="header-callsign">
           {{ brigade?.name ?? 'Appliance Checks' }}
         </div>
       </div>
+      <router-link
+        v-if="currentUser && brigade"
+        :to="`/${slug}/admin`"
+        class="header-back header-manage"
+      >
+        Manage
+      </router-link>
     </header>
 
     <div
@@ -58,6 +74,14 @@ onMounted(async () => {
       <div class="error-msg">
         {{ error }}
       </div>
+    </div>
+    <div
+      v-else-if="inactive"
+      class="screen active screen-picker"
+    >
+      <p class="error-msg">
+        Checks are disabled for this brigade.
+      </p>
     </div>
     <div
       v-else
