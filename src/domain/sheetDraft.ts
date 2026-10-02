@@ -35,7 +35,7 @@ function insertAt<T>(list: T[], index: number, entry: T): T[] {
   return [...list.slice(0, at), entry, ...list.slice(at)]
 }
 
-function withFields(item: Item, fields: Partial<ItemFields>): Item {
+export function withFields(item: Item, fields: Partial<ItemFields>): Item {
   const { options, ...rest } = { ...item, ...fields }
   return rest.inputType === 'choice' ? { ...rest, options: options ?? [] } : rest
 }

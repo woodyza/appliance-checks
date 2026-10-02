@@ -39,6 +39,10 @@ _Avoid_: Name, ID
 The definition of the Sections and Items an appliance is checked against.
 _Avoid_: Template, checklist
 
+**Draft**:
+Unpublished edits to an Appliance's Check Sheet. Checks don't see them until they're Published.
+_Avoid_: Pending version
+
 **Section**:
 A named group of Items on a Check Sheet, e.g. a locker, an area of the cab, or a topic such as "Road user details".
 _Avoid_: Locker, compartment, category
@@ -58,7 +62,7 @@ One pass through every Item due on an appliance for a scheduled Check Day, ident
 _Avoid_: Check run, inspection
 
 **Complete**:
-A Check where every due Item is answered; an N counts as answered. Anything less is described by the percentage of due Items answered, and a Check nobody has started counts as 0%.
+A Check where every due Item is answered; an N counts as answered. An answer only counts if it fits its Item: a Choice answer that's no longer one of the options doesn't. Anything less is described by the percentage of due Items answered, and a Check nobody has started counts as 0%.
 _Avoid_: Done, submitted
 
 **Frozen**:

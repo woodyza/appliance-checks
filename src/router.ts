@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { SLUG_PATTERN } from './domain/slug'
 import { adminHome, authReady, currentUser, isSignInLink } from './state/auth'
+import ApplianceAdminView from './views/admin/ApplianceAdminView.vue'
 import AdminHub from './views/admin/AdminHub.vue'
 import BrigadeAdminView from './views/admin/BrigadeAdminView.vue'
 import SignIn from './views/admin/SignIn.vue'
@@ -25,9 +26,15 @@ export const router = createRouter({
     { path: `/:slug(${SLUG_PATTERN})`, component: ApplianceList, sensitive: true },
     {
       // The static `admin` segment outranks `/:slug/:applianceId`'s param, so this shadows an
-      // appliance id'd "admin" (appliance ids come from the CLI, so don't use that one).
+      // appliance id'd "admin" (the add form and the rules refuse that id).
       path: `/:slug(${SLUG_PATTERN})/admin`,
       component: BrigadeAdminView,
+      meta: { requiresAuth: true },
+      sensitive: true,
+    },
+    {
+      path: `/:slug(${SLUG_PATTERN})/admin/:applianceId`,
+      component: ApplianceAdminView,
       meta: { requiresAuth: true },
       sensitive: true,
     },

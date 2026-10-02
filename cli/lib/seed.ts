@@ -118,6 +118,27 @@ export async function writeBrigade(db: Firestore, input: SeedBrigadeInput): Prom
   }
 }
 
+// Drops the brigade's appliances (with their versions and drafts) and Checks, for a brigade the
+// e2e specs edit freely and so need rewriting from scratch each run.
+export async function deleteAppliancesAndChecks(db: Firestore, slug: string): Promise<void> {
+  const brigadeRef = db.collection('brigades').doc(slug)
+  await db.recursiveDelete(brigadeRef.collection('appliances'))
+  await db.recursiveDelete(brigadeRef.collection('checks'))
+}
+
+export async function writeApplianceWithoutCheckSheet(
+  db: Firestore,
+  slug: string,
+  appliance: { id: string; callsign: string },
+): Promise<void> {
+  await db
+    .collection('brigades')
+    .doc(slug)
+    .collection('appliances')
+    .doc(appliance.id)
+    .set({ callsign: appliance.callsign, active: true, currentCheckSheetVersion: null })
+}
+
 export async function deleteChecks(db: Firestore, slug: string): Promise<void> {
   const collectionRef = db.collection('brigades').doc(slug).collection('checks')
   const snapshot = await collectionRef.get()
