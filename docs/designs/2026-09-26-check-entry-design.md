@@ -2,7 +2,7 @@
 
 Port the Apps Script check UI onto Firestore, so a firefighter can scan an Appliance's QR code and run its Check with no sign-in (ADR 0001). Builds on the foundations design (`2026-09-25-foundations-design.md`). Terminology follows `CONTEXT.md`.
 
-Implemented in PR #10. This doc is updated to what shipped; why each change was made is in `docs/plans/impl/check-entry.md` (Decisions).
+Implemented in PR #10. This doc is updated to what shipped; why each change was made is in the implementation plan's Decisions section, which is no longer tracked (`git show 7b8120a:docs/plans/impl/check-entry.md`).
 
 Frozen only pins the Check Sheet version a Check renders against (ADR 0002). Answers on any Check in the current or previous month stay editable.
 

@@ -8,9 +8,9 @@ GitHub Issues on `woodyza/appliance-checks`, via the `gh` CLI. See `docs/agents/
 
 Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
-### Designs and plans
+### Designs
 
-Each slice of #1 gets a design in `docs/designs/<date>-<topic>-design.md` (updated to what shipped) and an implementation plan in `docs/plans/impl/<topic>.md`, whose Decisions section records deviations and why. Read the ones a new slice builds on: #6 reads Checks and Check Sheet versions as defined in the check entry design, and should reuse `src/domain/check.ts` for completeness. Environment setup and what's been verified on `dev` are in `docs/infra-setup.md`.
+Each slice of #1 gets a design in `docs/designs/<date>-<topic>-design.md`, updated to what shipped. Read the ones a new slice builds on: #6 reads Checks and Check Sheet versions as defined in the check entry design, and should reuse `src/domain/check.ts` for completeness. Environment setup and what's been verified on `dev` are in `docs/infra-setup.md`.
 
 ### Running things
 
