@@ -14,7 +14,7 @@ src/
   state/         Vue composables holding reactive session state (checkSession.ts)
   views/         Vue views (one per route)
   components/    shared Vue components
-cli/             admin CLI tools (provision, create-brigade, add-appliance, import-check-sheet, deploy, e2e-seed)
+cli/             admin CLI tools (provision, create-brigade, add-appliance, import-check-sheet, deploy, e2e-seed, check-prehijack)
 tests/
   domain/        unit tests
   rules/         Firestore rules tests (emulator)

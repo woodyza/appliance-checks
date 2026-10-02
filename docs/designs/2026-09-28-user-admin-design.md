@@ -27,7 +27,7 @@ adminUsers/{email}          — doc id is the lower-cased email address
 
 **Keyed by email, not UID.** The issue's own sketch keys this by UID, but a UID doesn't exist until the person's first sign-in, and the superadmin adds people by email beforehand. Email-link sign-in gives the token a verified `email` claim, so a rule can trust it directly — there's no "claim your record on first sign-in" step, and, more importantly, no self-service write path is needed for that step. `adminUsers` writes stay superadmin-only with no exceptions, which is a meaningfully lower-risk shape than a rule that would let a brand-new user copy a role/`brigadeIds` array into a doc keyed by their own UID.
 
-This only holds if the claim is verified. Provisioning enables the Email provider with `passwordRequired: false`, which allows email link *alongside* email/password, not instead of it. So anyone can sign up with an admin's address and a password of their choosing (App Check on Auth probably means from a real browser on the site, not a bare API call), and get a token whose `email` claim is that address but whose `email_verified` is false. Every email-based rule therefore requires `email_verified == true` (see `adminEmail()` below).
+This only holds if the claim is verified. Provisioning enables the Email provider with `passwordRequired: false`, which allows email link *alongside* email/password, not instead of it. So anyone can sign up with an admin's address and a password of their choosing (on `dev`, App Check on Auth rejects a bare API call, so it takes a real browser on the site), and get a token whose `email` claim is that address but whose `email_verified` is false. Every email-based rule therefore requires `email_verified == true` (see `adminEmail()` below).
 
 Trade-off: if an admin's email changes, the superadmin deletes the old doc and creates a new one under the new address — a manual step, the same shape as "reassigning" a user, which the UI already needs to support.
 
@@ -80,7 +80,11 @@ function isBrigadeAdmin(slug) {
 - `brigades/{slug}/checks/{checkId}`: `list` extended from `isSuperadmin() || scheduledDate >= firstOfPreviousMonth()` to `... || isBrigadeAdmin(slug)`. This is what lets an admin download an older Monthly Report for their own brigade. In this slice only the superadmin can reach Download (the page gate below), so the admin path is covered by rules tests alone until #12.
 - Everything else (brigade config, appliances, Check Sheet versions) stays `write: if false` — nothing in this slice needs admin writes there.
 
-**Accepted risk: account pre-hijacking.** An attacker who signs up with an admin's address and a password *before* that admin's first sign-in shares the admin's account afterwards. Checked in the Auth emulator: the admin's email-link sign-in lands on the attacker's account (same UID), marks the email verified, and the attacker's password still signs in with `email_verified: true`. Both methods report `sign_in_provider: "password"`, so the rules can't tell them apart. Production Firebase may clear the password on email-link sign-in; that's unverified (see `docs/infra-setup.md` for the manual check on `dev`). Accepted for this slice: it needs the admin's email in advance, and admin powers here are read-only (older Checks). Worth revisiting before #7 gives admins writes: turn sign-up off (Identity Platform, probably with billing, so alongside #8's move to Blaze) and have adding an admin also create their Auth account through the Admin SDK. Recorded in the ADR.
+**Account pre-hijacking: an emulator-only risk.** The worry is someone signing up with an admin's address and a password *before* that admin's first sign-in. The admin's email-link sign-in then lands on that same account (same UID) and marks it verified, and both methods report `sign_in_provider: "password"`, so the rules can't tell them apart.
+- In the Auth emulator, the earlier password still signs in afterwards, with `email_verified: true`.
+- On `dev`, production Firebase clears the password on that link sign-in, so the planted password stops working. Before that, the account's email is unverified, so the rules deny it.
+
+That rests on Firebase's current behaviour, not a documented guarantee. `npm run cli:check-prehijack` re-checks it (see `docs/infra-setup.md`), and it's worth re-running before #7 gives admins writes. Recorded in ADR 0005.
 
 ## Routing and navigation (superadmin-facing only, per Scope)
 
@@ -156,7 +160,7 @@ Spark allows 5 sign-in emails a day, project-wide (Blaze allows 25,000). Fine fo
 
 ## Changes during implementation
 
-- **Pre-hijacking is an accepted risk, not a TBC.** The emulator showed the attacker's password survives the admin's first email-link sign-in, and both methods report the same `sign_in_provider`, so the planned fallback (pinning the provider) couldn't work. The user chose to accept and document it (Firestore rules section, ADR 0005), with a manual check of production's behaviour in `docs/infra-setup.md`.
+- **Pre-hijacking turned out to be an emulator-only risk.** The emulator showed the attacker's password survives the admin's first email-link sign-in, and both methods report the same `sign_in_provider`, so the planned fallback (pinning the provider) couldn't work. The user chose to accept it pending a check of production. `cli/check-prehijack.ts` ran that check on `dev`: production clears the password on the link sign-in, and App Check rejects a bare API-key sign-up. See the Firestore rules section and ADR 0005.
 - **The `in` query was verified** in the emulator before implementation, so the "list my brigades" fallback for #12 isn't needed.
 - **Rules helpers that read documents sit inside the `documents` match**, and token claims are read with `get()`. At `service` level `$(database)` isn't bound and the request fails; the implementer first worked round it by inlining the lookups, and that was reverted to the designed helpers.
 - **`ReportView.vue` became `BrigadeAdminView.vue`**, and the hub is a new page, rather than repurposing `ReportView.vue` as the hub.
