@@ -252,12 +252,12 @@ Callsign [Mangawhai 8011]  Active [●]  QR …/x7k2mq/8011 [Copy]
 - **New rows and Sections are local until their first committed field.** A new Section has no "+ Item" until its title is committed, and a new row can't be dragged or deleted until then. Enter in any text cell of a table's last row adds a row.
 - **Rules tests** gained a case for a stray version doc alongside a valid Publish (the id clause on its own); the editor's e2e specs run against their own seeded brigade (`e2eedt`), plus an eighth spec for add, Undo, Alt+↑ and a Publish blocked by problems.
 - **Checks that were Complete only through an answer that no longer fits** (possible for data written before this change, because answering or opting in re-stamps a Check) are no longer Complete, so an in-window one can unfreeze and follow the latest sheet. New data can't get into that state; worth a query for in-window Checks before deploying.
+- **Verified on `dev`** (October 2026): `make provision` created the browser key, and importing a Google Sheet on the deployed site works.
 - **Open follow-ups:**
-  - Discard deletes whatever draft exists without checking its base, so it could discard another admin's newer draft. Arguably fine for one shared draft.
-  - A text cell whose Enter-commit fails keeps the typed value while focused, and re-sends it on blur.
-  - Undo into a Section deleted since shows the generic "Couldn't save".
-  - Re-running `make provision` doesn't update an existing browser key's referrers, and only Vite's default port 5173 is allowed on `dev`.
-  - `make provision` with the new key hasn't been run against a real project yet.
+  - Discard deletes whatever draft exists without checking its base, so it could discard another admin's newer draft. Arguably fine for one shared draft (#19).
+  - A text cell whose Enter-commit fails keeps the typed value while focused, and re-sends it on blur (#19).
+  - Undo into a Section deleted since shows the generic "Couldn't save" (#19).
+  - Re-running `make provision` doesn't update an existing browser key's referrers, and only Vite's default port 5173 is allowed on `dev` (#20).
 
 ## Out of scope
 
