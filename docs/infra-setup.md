@@ -52,9 +52,12 @@ For each project this creates, or checks and skips if it's already there:
 - the Auth Email link (passwordless) sign-in provider, via `PATCH identitytoolkit.googleapis.com/admin/v2/projects/{p}/config` (no firebase-tools command enables it). On a new project this fails with `CONFIGURATION_NOT_FOUND` until Authentication has been started in the console (see section 2).
 - Auth App Check enforcement, set to `enforced`. It protects the call that sends sign-in emails, so a script can't use up the day's quota. It's best-effort: if it fails, provisioning warns and carries on. On `dev` it went through on Spark, without Identity Platform.
 - `dev` only: an App Check debug token (display name `appliance-checks-e2e`) for `make e2e ENV=dev`, reusing `E2E_APPCHECK_DEBUG_TOKEN` from an existing `.env.dev` if there is one
-- `.env.<env>` (the Firebase web config and reCAPTCHA site key; gitignored, like `.firebaserc` — the config contains the project id). An existing `SUPERADMIN_UID` is kept across re-runs, the same as the debug token.
-- a Sheets API key named `appliance-checks-sheets-cli`, restricted to the Sheets API, for the CLI import (a browser import will need its own referrer-restricted key)
+- a browser Sheets API key named `appliance-checks-sheets-web`, restricted to the Sheets API and to the HTTP referrers `https://<project>.web.app/*` and `https://<project>.firebaseapp.com/*` (plus `http://localhost:5173/*` on `dev`), for importing a Google Sheet in the admin UI. It ends up in the bundle by design; the restrictions are its protection
+- `.env.<env>` (the Firebase web config, reCAPTCHA site key and browser Sheets key as `VITE_SHEETS_API_KEY`; gitignored, like `.firebaserc` — the config contains the project id). An existing `SUPERADMIN_UID` is kept across re-runs, the same as the debug token.
+- a Sheets API key named `appliance-checks-sheets-cli`, restricted to the Sheets API, for the CLI import
 - the environment's alias in `.firebaserc` (gitignored; on a new machine, re-running `make provision` recreates it)
+
+Local dev (the emulator) has no browser Sheets key by default, so an import in the admin UI fails with Google's "API key not valid" error. To try one, copy `VITE_SHEETS_API_KEY` from `.env.dev` into a gitignored `.env.development.local` (`dev`'s key allows `http://localhost:5173`).
 
 It's safe to re-run, e.g. after a step failed or a project was partly set up in the console. The key itself isn't printed; the script ends with the command to load it into your shell as `SHEETS_API_KEY`.
 

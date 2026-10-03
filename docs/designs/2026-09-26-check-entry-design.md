@@ -29,6 +29,7 @@ brigades/{slug}/checks/{applianceId}_{YYYY-MM-DD}      anonymous: get, bounded l
 - Completeness:
   - Due Items are the Weekly Items, plus the Monthly Items when `monthly` is set.
   - Complete means every due Item has a response. An N counts.
+  - An answer only counts if it fits its Item (Y/N: `Y` or `N`; Choice: one of its options; Written: non-empty), via `answerFits` in `src/domain/check.ts`. The editor can change an Item under a Check that isn't Frozen; see [the Check Sheet editor design](./2026-10-02-check-sheet-editor-design.md#answers-that-no-longer-fit-their-item).
   - Sections with no due Items are hidden.
   - This is a shared pure function, for reuse by #6 and #8.
 - Y/N works as it does now: tapping the active answer clears it.

@@ -1,4 +1,4 @@
-import { isDue, isFrozen, monthlyFor, renderVersion, sectionProgress } from './check'
+import { answerFits, isDue, isFrozen, monthlyFor, renderVersion, sectionProgress } from './check'
 import { addDays, checkDatesBetween, currentCheckDate, firstOfNextMonth } from './schedule'
 import type { Appliance, Brigade, Check, CheckSheetVersion, Item } from './types'
 
@@ -65,10 +65,11 @@ function cellFor(itemId: string, version: CheckSheetVersion, monthly: boolean, r
   if (!isDue(item, monthly)) return { kind: 'notDue' }
 
   const raw = responses[itemId]
+  const fitting = answerFits(item, raw) ? raw : null
   if (item.inputType === 'yn') {
-    return { kind: 'yn', value: raw === 'Y' || raw === 'N' ? raw : null }
+    return { kind: 'yn', value: fitting as 'Y' | 'N' | null }
   }
-  return { kind: 'value', value: raw !== undefined && raw !== '' ? raw : null }
+  return { kind: 'value', value: fitting }
 }
 
 // Inserts `target` into `merged` right after the nearest of its preceding siblings (per

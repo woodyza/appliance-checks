@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import type { RulesTestEnvironment } from '@firebase/rules-unit-testing'
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing'
 import firebase from 'firebase/compat/app'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { addDays, firstOfPreviousMonth, today } from '../../src/domain/schedule'
 import { newId } from '../../src/domain/slug'
 
@@ -515,5 +515,167 @@ describe('brigade admin', () => {
 
   it('denies an unfiltered brigades list', async () => {
     await assertFails(adminDb('jo@example.com').collection('brigades').get())
+  })
+})
+
+describe('check sheet editor', () => {
+  const EMPTY_PATH = `${BRIGADE_PATH}/appliances/8020`
+  const SHEETED_PATH = `${BRIGADE_PATH}/appliances/8021`
+  const DRAFT_PATH = `${SHEETED_PATH}/private/checkSheetDraft`
+  const EMPTY_DRAFT_PATH = `${EMPTY_PATH}/private/checkSheetDraft`
+  const NEW_APPLIANCE = { callsign: 'New 1', active: true, currentCheckSheetVersion: null }
+  const DRAFT = { baseVersion: 1, origin: { type: 'editor' }, sections: [] }
+
+  function jo(): firebase.firestore.Firestore {
+    return adminDb('jo@example.com')
+  }
+
+  function sam(): firebase.firestore.Firestore {
+    return adminDb('sam@example.com')
+  }
+
+  function versionData(version: number, overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      version,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      origin: { type: 'editor' },
+      sections: [],
+      ...overrides,
+    }
+  }
+
+  function publish(
+    db: firebase.firestore.Firestore,
+    appliancePath: string,
+    version: number,
+    options: { data?: Record<string, unknown>; pointer?: number } = {},
+  ): Promise<void> {
+    const batch = db.batch()
+    batch.set(
+      db.doc(`${appliancePath}/checkSheetVersions/${String(version)}`),
+      options.data ?? versionData(version),
+    )
+    batch.update(db.doc(appliancePath), { currentCheckSheetVersion: options.pointer ?? version })
+    batch.delete(db.doc(`${appliancePath}/private/checkSheetDraft`))
+    return batch.commit()
+  }
+
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore()
+      await db.doc(`${EMPTY_PATH}/checkSheetVersions/1`).delete()
+      await db.doc(`${SHEETED_PATH}/checkSheetVersions/2`).delete()
+      await db.doc(`${SHEETED_PATH}/checkSheetVersions/3`).delete()
+      await db.doc(EMPTY_PATH).set({ callsign: 'Test 8020', active: true, currentCheckSheetVersion: null })
+      await db.doc(SHEETED_PATH).set({ callsign: 'Test 8021', active: true, currentCheckSheetVersion: 1 })
+      await db.doc(`${SHEETED_PATH}/checkSheetVersions/1`).set({ version: 1, sections: [] })
+      await db.doc(DRAFT_PATH).set(DRAFT)
+      await db.doc(EMPTY_DRAFT_PATH).set({ ...DRAFT, baseVersion: null })
+      await db.doc(`${SHEETED_PATH}/private/other`).set({ x: 1 })
+    })
+  })
+
+  it('allows the superadmin and an assigned admin to create an appliance', async () => {
+    await assertSucceeds(superadminDb().doc(`${BRIGADE_PATH}/appliances/new1`).set(NEW_APPLIANCE))
+    await assertSucceeds(jo().doc(`${BRIGADE_PATH}/appliances/new2`).set(NEW_APPLIANCE))
+  })
+
+  it.each([
+    ['an extra key', 'new3', { ...NEW_APPLIANCE, extra: 1 }],
+    ['an id with a space', 'a b', NEW_APPLIANCE],
+    ['the id admin', 'admin', NEW_APPLIANCE],
+    ['active false', 'new3', { ...NEW_APPLIANCE, active: false }],
+    ['a non-null pointer', 'new3', { ...NEW_APPLIANCE, currentCheckSheetVersion: 1 }],
+    ['an empty callsign', 'new3', { ...NEW_APPLIANCE, callsign: '' }],
+    ['a 61-character callsign', 'new3', { ...NEW_APPLIANCE, callsign: 'x'.repeat(61) }],
+  ])('denies creating an appliance with %s', async (_name, id, data) => {
+    await assertFails(jo().doc(`${BRIGADE_PATH}/appliances/${id}`).set(data))
+  })
+
+  it('denies creating an appliance as an unassigned admin and as anonymous', async () => {
+    await assertFails(sam().doc(`${BRIGADE_PATH}/appliances/new3`).set(NEW_APPLIANCE))
+    await assertFails(unauthedDb().doc(`${BRIGADE_PATH}/appliances/new3`).set(NEW_APPLIANCE))
+  })
+
+  it('allows an assigned admin to rename and deactivate an appliance', async () => {
+    await assertSucceeds(jo().doc(SHEETED_PATH).update({ callsign: 'Renamed' }))
+    await assertSucceeds(jo().doc(SHEETED_PATH).update({ active: false }))
+  })
+
+  it.each([
+    ['an extra key', { extra: 1 }],
+    ['a 61-character callsign', { callsign: 'x'.repeat(61) }],
+  ])('denies updating an appliance with %s', async (_name, data) => {
+    await assertFails(jo().doc(SHEETED_PATH).update(data))
+  })
+
+  it.each([
+    ['an existing Check Sheet', SHEETED_PATH, 2],
+    ['no Check Sheet yet', EMPTY_PATH, 1],
+  ])('allows Publish (version, pointer and draft delete in one batch) with %s', async (_name, path, version) => {
+    await assertSucceeds(publish(jo(), path, version))
+  })
+
+  it('denies the version create alone', async () => {
+    await assertFails(jo().doc(`${SHEETED_PATH}/checkSheetVersions/2`).set(versionData(2)))
+  })
+
+  it('denies the pointer update alone', async () => {
+    await assertFails(jo().doc(SHEETED_PATH).update({ currentCheckSheetVersion: 2 }))
+  })
+
+  it.each<[string, Parameters<typeof publish>[3], number]>([
+    ['a pointer jump from 1 to 3', {}, 3],
+    ['an origin type other', { data: versionData(2, { origin: { type: 'other' } }) }, 2],
+    ['an extra key', { data: versionData(2, { extra: 1 }) }, 2],
+    ['a client createdAt', { data: versionData(2, { createdAt: new Date() }) }, 2],
+  ])('denies Publish with %s', async (_name, options, version) => {
+    await assertFails(publish(jo(), SHEETED_PATH, version, options))
+  })
+
+  it('denies a stray version whose doc id differs from its version alongside a valid Publish', async () => {
+    const db = jo()
+    const batch = db.batch()
+    batch.set(db.doc(`${SHEETED_PATH}/checkSheetVersions/2`), versionData(2))
+    batch.set(db.doc(`${SHEETED_PATH}/checkSheetVersions/3`), versionData(2))
+    batch.update(db.doc(SHEETED_PATH), { currentCheckSheetVersion: 2 })
+
+    await assertFails(batch.commit())
+  })
+
+  it('denies Publish as an unassigned admin', async () => {
+    await assertFails(publish(sam(), SHEETED_PATH, 2))
+  })
+
+  it('denies updating and deleting a version, even as the superadmin', async () => {
+    const ref = superadminDb().doc(`${SHEETED_PATH}/checkSheetVersions/1`)
+
+    await assertFails(ref.update({ version: 1 }))
+    await assertFails(ref.delete())
+  })
+
+  it('lets an assigned admin create, read, update and delete the draft', async () => {
+    const ref = jo().doc(DRAFT_PATH)
+
+    await assertSucceeds(ref.get())
+    await assertSucceeds(ref.set({ ...DRAFT, baseVersion: 1 }))
+    await assertSucceeds(ref.delete())
+    await assertSucceeds(ref.set(DRAFT))
+  })
+
+  it('denies a draft with an extra key', async () => {
+    await assertFails(jo().doc(DRAFT_PATH).set({ ...DRAFT, extra: 1 }))
+  })
+
+  it('denies an unassigned admin and anonymous from reading or writing the draft', async () => {
+    for (const db of [sam(), unauthedDb()]) {
+      await assertFails(db.doc(DRAFT_PATH).get())
+      await assertFails(db.doc(DRAFT_PATH).set(DRAFT))
+    }
+  })
+
+  it('denies reading and writing other private docs as an assigned admin', async () => {
+    await assertFails(jo().doc(`${SHEETED_PATH}/private/other`).get())
+    await assertFails(jo().doc(`${SHEETED_PATH}/private/other`).set({ x: 2 }))
   })
 })

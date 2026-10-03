@@ -140,3 +140,15 @@ export async function writeVersion(
     return nextVersion
   })
 }
+
+export async function hasCheckSheetDraft(db: Firestore, slug: string, applianceId: string): Promise<boolean> {
+  const snapshot = await db
+    .collection('brigades')
+    .doc(slug)
+    .collection('appliances')
+    .doc(applianceId)
+    .collection('private')
+    .doc('checkSheetDraft')
+    .get()
+  return snapshot.exists
+}

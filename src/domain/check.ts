@@ -5,6 +5,18 @@ export function isDue(item: Item, monthly: boolean): boolean {
   return item.scope === 'weekly' || (item.scope === 'monthly' && monthly)
 }
 
+export function answerFits(item: Item, value: string | undefined): boolean {
+  if (value === undefined) return false
+  switch (item.inputType) {
+    case 'yn':
+      return value === 'Y' || value === 'N'
+    case 'choice':
+      return (item.options ?? []).includes(value)
+    case 'written':
+      return value !== ''
+  }
+}
+
 export interface SectionProgress {
   section: Section
   due: Item[]
@@ -19,7 +31,7 @@ export function sectionProgress(
   return sections
     .map((section) => {
       const due = section.items.filter((item) => isDue(item, monthly))
-      const answered = due.filter((item) => responses[item.id] !== undefined).length
+      const answered = due.filter((item) => answerFits(item, responses[item.id])).length
       return { section, due, answered }
     })
     .filter((progress) => progress.due.length > 0)
@@ -27,7 +39,7 @@ export function sectionProgress(
 
 export function isComplete(sections: Section[], responses: Record<string, string>, monthly: boolean): boolean {
   return sections.every((section) =>
-    section.items.every((item) => !isDue(item, monthly) || responses[item.id] !== undefined),
+    section.items.every((item) => !isDue(item, monthly) || answerFits(item, responses[item.id])),
   )
 }
 

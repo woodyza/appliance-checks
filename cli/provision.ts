@@ -20,6 +20,8 @@ const SERVICES = [
   'identitytoolkit.googleapis.com',
 ]
 const SHEETS_KEY_NAME = 'appliance-checks-sheets-cli'
+const SHEETS_WEB_KEY_NAME = 'appliance-checks-sheets-web'
+const VITE_DEV_ORIGIN = 'http://localhost:5173'
 const WEB_APP_NAME = 'appliance-checks-web'
 const RECAPTCHA_KEY_NAME = 'appliance-checks-web'
 const RECAPTCHA_MIN_SCORE = 0.3
@@ -96,26 +98,26 @@ function ensureHosting(projectId: string): void {
   }
 }
 
-function sheetsKeyName(projectId: string): string | null {
+function apiKeyName(projectId: string, displayName: string): string | null {
   const listed = capture('gcloud', [
     'services', 'api-keys', 'list', `--project=${projectId}`,
-    `--filter=displayName="${SHEETS_KEY_NAME}"`, '--format=value(displayName,name)',
+    `--filter=displayName="${displayName}"`, '--format=value(displayName,name)',
   ])
   if (!listed.ok) throw new Error(`Could not list API keys: ${listed.stderr}`)
   const names = listed.stdout
     .split('\n')
     .map((line) => line.split('\t'))
-    .filter(([displayName]) => displayName === SHEETS_KEY_NAME)
+    .filter(([name]) => name === displayName)
     .map(([, name]) => name)
   if (names.length > 1) {
-    throw new Error(`Found ${names.length} API keys named "${SHEETS_KEY_NAME}"; delete the extras in the console.`)
+    throw new Error(`Found ${names.length} API keys named "${displayName}"; delete the extras in the console.`)
   }
   return names[0] ?? null
 }
 
 function ensureSheetsKey(projectId: string): string {
   step(`Sheets API key "${SHEETS_KEY_NAME}"`)
-  const existing = sheetsKeyName(projectId)
+  const existing = apiKeyName(projectId, SHEETS_KEY_NAME)
   if (existing) {
     console.log('  already exists')
     return existing
@@ -126,9 +128,35 @@ function ensureSheetsKey(projectId: string): string {
     `--display-name=${SHEETS_KEY_NAME}`, '--api-target=service=sheets.googleapis.com',
   ])
   if (!creating.ok) throw new Error(`Could not create the Sheets API key: ${creating.stderr}`)
-  const created = sheetsKeyName(projectId)
+  const created = apiKeyName(projectId, SHEETS_KEY_NAME)
   if (!created) throw new Error('Created the Sheets API key but could not find it afterwards.')
   return created
+}
+
+// The browser import's key ends up in the bundle, so it's restricted to the Sheets API and to this
+// site's origins (plus the Vite dev server on `dev`).
+function ensureSheetsWebKey(env: string, projectId: string): string {
+  step(`Browser Sheets API key "${SHEETS_WEB_KEY_NAME}"`)
+  let keyName = apiKeyName(projectId, SHEETS_WEB_KEY_NAME)
+  if (keyName) {
+    console.log('  already exists')
+  } else {
+    const referrers = [`https://${projectId}.web.app/*`, `https://${projectId}.firebaseapp.com/*`]
+    if (env === 'dev') referrers.push(`${VITE_DEV_ORIGIN}/*`)
+    const creating = capture('gcloud', [
+      'services', 'api-keys', 'create', `--project=${projectId}`,
+      `--display-name=${SHEETS_WEB_KEY_NAME}`, '--api-target=service=sheets.googleapis.com',
+      `--allowed-referrers=${referrers.join(',')}`,
+    ])
+    if (!creating.ok) throw new Error(`Could not create the browser Sheets API key: ${creating.stderr}`)
+    keyName = apiKeyName(projectId, SHEETS_WEB_KEY_NAME)
+    if (!keyName) throw new Error('Created the browser Sheets API key but could not find it afterwards.')
+  }
+  const keyString = capture('gcloud', [
+    'services', 'api-keys', 'get-key-string', keyName, `--project=${projectId}`, '--format=value(keyString)',
+  ])
+  if (!keyString.ok || !keyString.stdout) throw new Error(`Could not read the browser Sheets API key: ${keyString.stderr}`)
+  return keyString.stdout
 }
 
 interface FirebaseApp {
@@ -308,7 +336,13 @@ function ensureDebugToken(env: string, projectId: string, appId: string): string
   return token
 }
 
-function writeEnvValues(env: string, config: WebSdkConfig, siteKey: string, debugToken: string | null): void {
+function writeEnvValues(
+  env: string,
+  config: WebSdkConfig,
+  siteKey: string,
+  sheetsWebKey: string,
+  debugToken: string | null,
+): void {
   step(`.env.${env}`)
   const values: Record<string, string> = {
     VITE_USE_EMULATOR: 'false',
@@ -317,6 +351,7 @@ function writeEnvValues(env: string, config: WebSdkConfig, siteKey: string, debu
     VITE_FIREBASE_PROJECT_ID: config.projectId,
     VITE_FIREBASE_APP_ID: config.appId,
     VITE_RECAPTCHA_SITE_KEY: siteKey,
+    VITE_SHEETS_API_KEY: sheetsWebKey,
   }
   if (debugToken) values.E2E_APPCHECK_DEBUG_TOKEN = debugToken
   const existingSuperadminUid = readEnvFile(`.env.${env}`)?.SUPERADMIN_UID
@@ -385,7 +420,8 @@ async function main(): Promise<void> {
   await enableEmailLinkSignIn(projectId)
   await enforceAuth(projectId, number)
   const debugToken = ensureDebugToken(env, projectId, appId)
-  writeEnvValues(env, config, siteKey, debugToken)
+  const sheetsWebKey = ensureSheetsWebKey(env, projectId)
+  writeEnvValues(env, config, siteKey, sheetsWebKey, debugToken)
   const keyName = ensureSheetsKey(projectId)
   writeAlias(env, aliasUpdate)
 

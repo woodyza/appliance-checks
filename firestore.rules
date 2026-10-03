@@ -68,6 +68,28 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/brigades/$(slug)).data.brigadeId in adminBrigadeIds());
     }
 
+    function applianceDocPath(slug, applianceId) {
+      return /databases/$(database)/documents/brigades/$(slug)/appliances/$(applianceId);
+    }
+
+    function validApplianceFields(data) {
+      return data.keys().hasOnly(['callsign', 'active', 'currentCheckSheetVersion'])
+        && data.keys().hasAll(['callsign', 'active', 'currentCheckSheetVersion'])
+        && data.callsign is string
+        && data.callsign.size() >= 1
+        && data.callsign.size() <= 60
+        && data.active is bool;
+    }
+
+    function validPointerMove(slug, applianceId) {
+      let before = resource.data.currentCheckSheetVersion;
+      let after = request.resource.data.currentCheckSheetVersion;
+      return after == before
+        || (after is int
+          && after == (before == null ? 1 : before + 1)
+          && existsAfter(/databases/$(database)/documents/brigades/$(slug)/appliances/$(applianceId)/checkSheetVersions/$(string(after))));
+    }
+
     match /brigades/{slug} {
       allow get: if true;
       allow list: if isSuperadmin() || (isAdmin() && resource.data.brigadeId in adminBrigadeIds());
@@ -79,11 +101,42 @@ service cloud.firestore {
 
       match /appliances/{applianceId} {
         allow get, list: if true;
-        allow write: if false;
+
+        allow create: if isBrigadeAdmin(slug)
+          && validApplianceFields(request.resource.data)
+          && request.resource.data.active == true
+          && request.resource.data.currentCheckSheetVersion == null
+          && applianceId.matches('^[A-Za-z0-9_-]{1,32}$')
+          && applianceId != 'admin';
+
+        allow update: if isBrigadeAdmin(slug)
+          && validApplianceFields(request.resource.data)
+          && validPointerMove(slug, applianceId);
+
+        allow delete: if false;
 
         match /checkSheetVersions/{version} {
           allow get, list: if true;
-          allow write: if false;
+
+          allow create: if isBrigadeAdmin(slug)
+            && request.resource.data.keys().hasOnly(['version', 'createdAt', 'origin', 'sections'])
+            && request.resource.data.keys().hasAll(['version', 'createdAt', 'origin', 'sections'])
+            && request.resource.data.version is int
+            && version == string(request.resource.data.version)
+            && getAfter(applianceDocPath(slug, applianceId)).data.currentCheckSheetVersion == request.resource.data.version
+            && request.resource.data.createdAt == request.time
+            && request.resource.data.origin is map
+            && request.resource.data.origin.type in ['editor', 'import']
+            && request.resource.data.sections is list;
+
+          allow update, delete: if false;
+        }
+
+        match /private/checkSheetDraft {
+          allow read, delete: if isBrigadeAdmin(slug);
+          allow create, update: if isBrigadeAdmin(slug)
+            && request.resource.data.keys().hasOnly(['baseVersion', 'origin', 'sections'])
+            && request.resource.data.keys().hasAll(['baseVersion', 'origin', 'sections']);
         }
       }
 
