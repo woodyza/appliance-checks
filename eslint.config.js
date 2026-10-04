@@ -5,7 +5,7 @@ import tseslint from 'typescript-eslint'
 import pluginVue from 'eslint-plugin-vue'
 
 export default defineConfig(
-  globalIgnores(['dist/**', 'apps-script/**', 'node_modules/**', 'playwright-report/**', 'test-results/**']),
+  globalIgnores(['dist/**', 'apps-script/**', 'node_modules/**', 'playwright-report/**', 'test-results/**', 'functions/lib/**']),
   eslint.configs.recommended,
   tseslint.configs.recommended,
   pluginVue.configs['flat/recommended'],

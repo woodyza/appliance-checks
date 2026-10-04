@@ -14,7 +14,8 @@ src/
   state/         Vue composables holding reactive session state (checkSession.ts, sheetEditor.ts)
   views/         Vue views (one per route)
   components/    shared Vue components
-cli/             admin CLI tools (provision, create-brigade, add-appliance, import-check-sheet, deploy, e2e-seed, check-prehijack)
+cli/             admin CLI tools (provision, create-brigade, add-appliance, import-check-sheet, brigade-settings, deploy, e2e-seed, check-prehijack)
+functions/       Cloud Functions workspace: the weekly VSO email (`src/`, bundled by esbuild into the gitignored `lib/`)
 tests/
   domain/        unit tests
   rules/         Firestore rules tests (emulator)
@@ -73,8 +74,8 @@ The CLI's `add-appliance` and `import-check-sheet` (below) still work as alterna
 - `make test-unit` / `make test-emulator` — either suite on its own.
 - `make lint` / `make typecheck`
 - `make dev` — the Firestore emulator, dev seed and Vite together; Ctrl-C stops them (see Local dev).
-- `make provision ENV=dev|prod [PROJECT_ID=<id>]` — creates or checks the Firebase project and its Firestore, Hosting, App Check/reCAPTCHA and Sheets API key, and writes `.env.<env>`; safe to re-run. `PROJECT_ID` is only needed the first time, after that it comes from `.firebaserc`. See [`docs/infra-setup.md`](./docs/infra-setup.md).
-- `make deploy ENV=dev|prod` — builds and deploys Hosting + Firestore rules/indexes to that environment, behind an account confirmation prompt.
+- `make provision ENV=dev|prod [PROJECT_ID=<id>]` — creates or checks the Firebase project and its Firestore, Hosting, App Check/reCAPTCHA and Sheets API key (plus, when billing is enabled, the weekly email's functions setup), and writes `.env.<env>`; safe to re-run. `PROJECT_ID` is only needed the first time, after that it comes from `.firebaserc`. See [`docs/infra-setup.md`](./docs/infra-setup.md).
+- `make deploy ENV=dev|prod` — builds and deploys Hosting + Firestore rules/indexes (and the Cloud Functions, when billing is enabled on the project) to that environment, behind an account confirmation prompt.
 - `make e2e [ENV=dev]` — Playwright, kept out of `make check`. No `ENV` (default): seeds then runs against the Firestore emulator and a local Vite server. `ENV=dev`: seeds and runs against deployed `dev`, using the `E2E_APPCHECK_DEBUG_TOKEN` from `.env.dev`. Requires `npx playwright install chromium` once.
 - `make e2e-report` — opens the HTML report from the last `make e2e` run: a screenshot and video of every spec locally, and a trace of any failure (failures only for `ENV=dev`).
 - `make apps-script-push` / `make apps-script-deploy` / `make apps-script-test-url` — the Apps Script app's clasp commands, run from `apps-script/`.
@@ -89,6 +90,7 @@ All take `--project dev|prod|emulator` (default `emulator`); `dev`/`prod` print 
 ```bash
 npm run cli:create-brigade -- --name "Mangawhai" --check-day 1
 npm run cli:add-appliance -- --brigade <slug> --id 8011 --callsign "Mangawhai 8011"
+npm run cli:brigade-settings -- --brigade <slug> [--report-email <addr> | --clear-report-email] [--weekly-email on|off]
 SHEETS_API_KEY=... npm run cli:import-check-sheet -- --brigade <slug> --appliance 8011 [--spreadsheet <id>] [--dry-run]
 ```
 

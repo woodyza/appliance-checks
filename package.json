@@ -2,6 +2,9 @@
   "name": "appliance-checks",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "functions"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -13,6 +16,7 @@
     "dev:seed": "tsx cli/dev-seed.ts",
     "cli:create-brigade": "tsx cli/create-brigade.ts",
     "cli:add-appliance": "tsx cli/add-appliance.ts",
+    "cli:brigade-settings": "tsx cli/brigade-settings.ts",
     "cli:import-check-sheet": "tsx cli/import-check-sheet.ts",
     "cli:deploy": "tsx cli/deploy.ts",
     "cli:check-prehijack": "tsx cli/check-prehijack.ts",

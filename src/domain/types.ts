@@ -11,6 +11,7 @@ export interface Brigade {
 
 export interface BrigadeSettings {
   reportEmail?: string
+  weeklyEmail?: boolean
 }
 
 export interface Appliance {

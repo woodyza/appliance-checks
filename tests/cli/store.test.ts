@@ -1,6 +1,6 @@
 import type { Firestore } from 'firebase-admin/firestore'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { addAppliance, createBrigade, getCurrentVersion, writeVersion } from '../../cli/lib/store'
+import { addAppliance, createBrigade, getCurrentVersion, updateBrigadeSettings, writeVersion } from '../../cli/lib/store'
 import { resolveTarget } from '../../cli/lib/target'
 import { reconcile } from '../../src/domain/import/reconcile'
 import type { ParsedCheckSheet, Section } from '../../src/domain/types'
@@ -58,6 +58,35 @@ describe('addAppliance', () => {
     await expect(addAppliance(db, 'unknown-slug', { id: '8011', callsign: 'Test 8011' })).rejects.toThrow(
       /No brigade/,
     )
+  })
+})
+
+describe('updateBrigadeSettings', () => {
+  async function settingsData(slug: string): Promise<Record<string, unknown> | undefined> {
+    return (await db.collection('brigades').doc(slug).collection('private').doc('settings').get()).data()
+  }
+
+  it('sets the Report Email and weekly email flag and returns the settings before and after', async () => {
+    const { slug } = await createBrigade(db, { name: 'Test Brigade', checkDay: 1 })
+
+    const result = await updateBrigadeSettings(db, slug, { reportEmail: 'vso@x.nz', weeklyEmail: false })
+
+    expect(result).toEqual({ before: {}, after: { reportEmail: 'vso@x.nz', weeklyEmail: false } })
+    expect(await settingsData(slug)).toEqual({ reportEmail: 'vso@x.nz', weeklyEmail: false })
+  })
+
+  it('removes the Report Email when it is cleared, leaving other settings alone', async () => {
+    const { slug } = await createBrigade(db, { name: 'Test Brigade', checkDay: 1 })
+    await updateBrigadeSettings(db, slug, { reportEmail: 'vso@x.nz', weeklyEmail: false })
+
+    const result = await updateBrigadeSettings(db, slug, { reportEmail: null })
+
+    expect(result.after).toEqual({ weeklyEmail: false })
+    expect(await settingsData(slug)).toEqual({ weeklyEmail: false })
+  })
+
+  it('fails when the brigade does not exist', async () => {
+    await expect(updateBrigadeSettings(db, 'unknown-slug', { weeklyEmail: true })).rejects.toThrow(/No brigade/)
   })
 })
 

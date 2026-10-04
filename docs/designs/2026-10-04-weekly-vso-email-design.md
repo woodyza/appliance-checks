@@ -14,10 +14,10 @@ Departures from the issue:
 
 - A `functions/` package with its own `package.json` (firebase-functions v2, firebase-admin, nodemailer), on Node 22, in `australia-southeast1`.
   - It imports `../src/domain/*`, and esbuild bundles it into a gitignored `functions/lib/index.js` as a `firebase.json` predeploy step. Cloud Build installs the runtime dependencies from `functions/package.json`.
-  - `make check` installs `functions/` dependencies if they're missing, and lints, typechecks and tests `functions/src` with the root tooling.
+  - `functions/` is an npm workspace, so the root `npm install` covers its dependencies, and `make check` lints, typechecks and tests `functions/src` with the root tooling.
 - One function, `weeklyVsoEmail`: `onSchedule('0 7 * * *', timeZone: 'Pacific/Auckland')`, so one Scheduler job per project (2 of the billing account's 3 free jobs across dev and prod).
 - The handler wraps `sendWeeklyEmails({ db, send, today })`, with `send` injected so tests can capture messages.
-- No retries, so a partial failure never double-sends.
+- No retries, so a partial failure never double-sends. A run with any failure ends as failed (after logging), which only marks it; nothing is resent.
 
 Each run:
 
@@ -54,7 +54,7 @@ Addresses are lowercased and grouped. Each address gets **one email with one com
 
 The email:
 
-- Subject: `Appliance checks, Mon 28 Sep: 3 of 7 appliances incomplete`, or `… all complete`.
+- Subject: `Appliance checks, Mon 21 Sep: 3 of 7 appliances incomplete`, or `… all complete`. The date is the reported Check's, ie a week before the send.
 - One table, Brigade | Appliance | Completion, sorted by brigade name then Callsign. The Brigade cell is only on each brigade's first row, and flagged rows are highlighted. HTML with a plain-text alternative.
 - One link to `https://<project>.web.app/admin`. No Brigade Links.
 
@@ -70,11 +70,11 @@ The email:
   - The app password is a Secret Manager secret, `GMAIL_APP_PASSWORD` (`defineSecret`), bound only to `weeklyVsoEmail`.
   - The From address is `defineString('MAIL_FROM')`, in a gitignored `functions/.env.<alias>`, so the address stays out of this public repo.
 - `make provision`, new idempotent steps:
-  1. Check that billing is enabled on the project. If it isn't, it warns that functions won't deploy and skips the steps below.
+  1. Check that billing is enabled on the project. If it isn't, it warns that functions won't deploy and skips the steps below. If gcloud can't read the billing status (eg wrong account or permissions), it fails rather than skipping.
   2. Enable the Cloud Functions, Cloud Build, Artifact Registry, Cloud Run, Eventarc, Cloud Scheduler and Secret Manager APIs.
   3. If `GMAIL_APP_PASSWORD` doesn't exist, prompt for it (hidden input) and run `firebase functions:secrets:set`. An existing secret is left alone.
   4. If `MAIL_FROM` is missing from `functions/.env.<alias>`, prompt for it.
-  5. Set an Artifact Registry cleanup policy (`firebase functions:artifacts:setpolicy`).
+  5. Set an Artifact Registry cleanup policy (`firebase functions:artifacts:setpolicy`). Before the first functions deploy there's no repository yet, so this only takes effect on a re-run; the first deploy offers to set one itself.
 - `make deploy` adds `functions` to `--only` when billing is enabled, and otherwise skips them with a warning.
 - `docs/infra-setup.md`:
   - `dev` on Blaze
@@ -116,6 +116,18 @@ The email:
   3. `gcloud scheduler jobs run …`.
   4. One email arrives with three rows: Complete, n% flagged, and not started flagged.
   5. The logs show the other `dev` brigades falling back to VSOs, or skipped.
+
+## Changes during implementation
+
+- **Workspace, not a separate install**: `functions/` is an npm workspace rather than `make check` installing its dependencies. One `firebase-admin` is shared by the app, the CLI and the function. `functions/` has no lockfile of its own, so Cloud Build resolves its `^` ranges fresh on each deploy.
+- **nodemailer 10**, which ships its own types.
+- **Subject date** is the reported Check's date (the approved example read like the send date). Worth a second look if the send date reads better.
+- **Failed runs**: the function logs every result, then throws if anything failed, so the run shows as failed; with retries off nothing is resent. The timeout is 300s, since sends run one after another.
+- **Billing check fails fast** when gcloud can't read it, instead of treating that as "no billing" and quietly skipping functions (review).
+- **Cleanup policy** only applies once functions have deployed once (review).
+- **`functions/.env*`** is gitignored, since the Firebase CLI can write `functions/.env.<projectId>`, which would leak the project id (review).
+- **Not exercised before the `dev` run**: the provision steps and the deploy's functions branch. Trigger discovery was checked in the functions emulator on Node 26, not the Node 22 runtime.
+- **Open follow-up**: logging results as they happen rather than at the end, so a run killed by the timeout still logs what it sent.
 
 ## Out of scope
 

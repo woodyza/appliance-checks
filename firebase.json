@@ -3,6 +3,19 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs22",
+    "codebase": "default",
+    "ignore": [
+      "node_modules",
+      "src",
+      ".env.local"
+    ],
+    "predeploy": [
+      "npm --workspace functions run build"
+    ]
+  },
   "hosting": {
     "public": "dist",
     "rewrites": [

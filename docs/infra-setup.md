@@ -1,6 +1,6 @@
 # Infrastructure setup
 
-How to stand up the `dev` and `prod` Firebase projects from scratch, e.g. for a new Google account. Later slices add steps (billing and Cloud Functions in #8); they'll be added here.
+How to stand up the `dev` and `prod` Firebase projects from scratch, e.g. for a new Google account. Cloud Functions (the weekly VSO email) need a billing account on the project, so those provision and deploy steps are skipped without one.
 
 ## 1. Accounts
 
@@ -31,7 +31,7 @@ Each new project also needs Authentication started once in the console. The API 
 
 ## 3. Provision each environment
 
-Project ids are globally unique and permanent, and the site is served at `<project-id>.web.app`, so the id is effectively the site's address. For prod, add a random suffix so it can't be guessed (e.g. `appliance-checks-` plus 6 random letters and digits, such as the output of `LC_ALL=C tr -dc a-z0-9 </dev/urandom | head -c6`; `make provision` warns if it's missing), and don't publish it: this repo is public, so ids stay out of git. `.firebaserc` is gitignored; keep a note of the ids somewhere private. Keep `dev` on the free Spark plan, so abuse can only take it offline, never cost money.
+Project ids are globally unique and permanent, and the site is served at `<project-id>.web.app`, so the id is effectively the site's address. For prod, add a random suffix so it can't be guessed (e.g. `appliance-checks-` plus 6 random letters and digits, such as the output of `LC_ALL=C tr -dc a-z0-9 </dev/urandom | head -c6`; `make provision` warns if it's missing), and don't publish it: this repo is public, so ids stay out of git. `.firebaserc` is gitignored; keep a note of the ids somewhere private. `dev` is on the Blaze plan (billing linked), since deployed functions need it and the weekly email's done-when runs there. `prod` stays on the free Spark plan, so abuse can only take it offline, never cost money, until the spending cap and the review of anonymous access in #23 are sorted. Link billing to a project in the console; `make provision` only checks for it.
 
 ```bash
 make provision ENV=dev PROJECT_ID=<dev project id>
@@ -46,6 +46,11 @@ For each project this creates, or checks and skips if it's already there:
 - the Firestore, Firebase Rules, Firebase Hosting, App Check, reCAPTCHA Enterprise, Sheets, API Keys and Identity Toolkit (Auth) APIs
 - the `(default)` Firestore database, in `australia-southeast1` unless you pass `REGION=...` (a database's location can't be changed later)
 - the default Hosting site
+- the weekly VSO email's functions setup, only if billing is enabled on the project (otherwise it warns and skips these, see #23):
+  - the Cloud Functions, Cloud Build, Artifact Registry, Cloud Run, Eventarc, Cloud Scheduler and Secret Manager APIs
+  - the `GMAIL_APP_PASSWORD` secret, prompted for with hidden input if it doesn't exist yet (an existing one is left alone). It's an app password for the dedicated Gmail account, which needs 2-Step Verification on first (Google Account, Security, App passwords)
+  - `MAIL_FROM`, the sending Gmail address, prompted for if it's missing from `functions/.env.<env>` (gitignored, so the address stays out of this public repo)
+  - an Artifact Registry cleanup policy for function images (`firebase functions:artifacts:setpolicy`, 1 day). Before the first functions deploy the repository doesn't exist, so this does nothing until a re-run; the first `make deploy` offers to set one itself
 - a Firebase Web app (`appliance-checks-web`) and its SDK config
 - a reCAPTCHA Enterprise score key (`appliance-checks-web`, restricted to `<project>.web.app` and `<project>.firebaseapp.com`), registered as the app's App Check provider at a minimum score of 0.3 with a 1h token TTL
 - Firestore App Check enforcement, set to `enforced`
@@ -70,7 +75,7 @@ The superadmin's UID isn't known until they've signed in once, so it can't be pr
 3. The "Not authorised" screen shows the signed-in UID. Copy it into `.env.<env>` as `SUPERADMIN_UID=<uid>`.
 4. `make deploy ENV=<env>` again to pick it up.
 
-Firebase Auth's email-link sign-in is capped at 5 emails/day project-wide on the Spark plan (25,000 on Blaze); `dev` and `prod` both stay on Spark until #8, so this bootstrap and any testing against a real inbox should be mindful of that limit.
+Firebase Auth's email-link sign-in is capped at 5 emails/day project-wide on the Spark plan (25,000 on Blaze). `dev` is on Blaze now, but `prod` stays on Spark until #23, so the `prod` bootstrap and any testing against a real inbox there should be mindful of that limit.
 
 App Check enforcement can take up to 15 minutes to take effect after `make provision` finishes, so wait before relying on it (e.g. before `make e2e ENV=dev` or checking the site in a browser).
 
@@ -104,11 +109,31 @@ npm run cli:import-check-sheet -- --project dev --brigade <slug> --appliance 801
 
 Hosting sends `X-Robots-Tag: noindex, nofollow` and serves a `robots.txt` that disallows everything, so well-behaved crawlers don't index the site even if a link leaks.
 
-`make deploy` replaces Hosting content and Firestore rules. `firestore.indexes.json` is the source of truth for indexes, so if any were created in the console the deploy offers to delete them: answer No unless you mean it.
+`make deploy` also deploys the `weeklyVsoEmail` function when billing is enabled on the project (esbuild bundles it into the gitignored `functions/lib/` first), and otherwise skips it with a warning. It replaces Hosting content and Firestore rules. `firestore.indexes.json` is the source of truth for indexes, so if any were created in the console the deploy offers to delete them: answer No unless you mean it.
 
 Appliances and their Check Sheets can also be added in the admin UI instead (`/<slug>/admin`, signed in as the superadmin), including the Google Sheet import.
 
 The spreadsheet id is the long string in the sheet's URL (`/spreadsheets/d/<id>/edit`), and the sheet must be viewable by anyone with the link.
+
+### Weekly VSO email
+
+`weeklyVsoEmail` runs at 07:00 NZ time every day and emails the brigades whose Check Day is that day, covering the previous Check: one email per address, with a row per appliance (Complete, n%, or not started; anything under 100% is highlighted). A brigade goes to its Report Email if it has one, otherwise to the VSOs assigned to it. Brigades can opt out. Per-brigade settings live in `brigades/{slug}/private/settings`, and nothing in the UI edits them yet (#22), so use the CLI:
+
+```bash
+npm run cli:brigade-settings -- --project dev --brigade <slug> --report-email <addr>    # or --clear-report-email
+npm run cli:brigade-settings -- --project dev --brigade <slug> --weekly-email off       # or on
+```
+
+It prints the settings before and after. Run it after `make e2e ENV=dev`, whose seed resets `private/settings`.
+
+To run the job by hand:
+
+```bash
+gcloud scheduler jobs run firebase-schedule-weeklyVsoEmail-australia-southeast1 --location australia-southeast1 --project <project id>
+npx firebase functions:log --only weeklyVsoEmail --project <env>
+```
+
+The logs list each email sent, each brigade skipped (and why) and each failure. The function never retries, so a failed send isn't repeated until the next Check Day.
 
 ## 5. E2E against dev
 
