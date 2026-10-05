@@ -12,7 +12,7 @@ export default defineConfig({
       {
         test: {
           name: 'emulator',
-          include: ['tests/rules/**/*.test.ts', 'tests/cli/*.test.ts'],
+          include: ['tests/rules/**/*.test.ts', 'tests/cli/*.test.ts', 'tests/functions/**/*.test.ts'],
           // tests/cli/store.test.ts wipes the whole emulator database between tests; running
           // emulator test files in parallel would race with tests/rules seeding its own data.
           fileParallelism: false,

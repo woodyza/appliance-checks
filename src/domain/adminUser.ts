@@ -16,7 +16,7 @@ export interface NormalisedAdminUser {
 
 export type NormaliseAdminUserResult = { ok: true; user: NormalisedAdminUser } | { ok: false; problem: string }
 
-function isValidEmail(email: string): boolean {
+export function isValidEmail(email: string): boolean {
   const parts = email.split('@')
   return parts.length === 2 && parts[0] !== '' && parts[1] !== ''
 }

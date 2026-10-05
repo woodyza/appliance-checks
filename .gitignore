@@ -14,3 +14,5 @@ firebase.deploy.json
 test-results/
 playwright-report/
 .emulator-data/
+functions/lib/
+functions/.env*

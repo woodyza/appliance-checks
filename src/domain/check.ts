@@ -37,6 +37,13 @@ export function sectionProgress(
     .filter((progress) => progress.due.length > 0)
 }
 
+export function checkPercent(sections: Section[], responses: Record<string, string>, monthly: boolean): number {
+  const progress = sectionProgress(sections, responses, monthly)
+  const due = progress.reduce((sum, section) => sum + section.due.length, 0)
+  const answered = progress.reduce((sum, section) => sum + section.answered, 0)
+  return due > 0 ? Math.floor((answered / due) * 100) : 0
+}
+
 export function isComplete(sections: Section[], responses: Record<string, string>, monthly: boolean): boolean {
   return sections.every((section) =>
     section.items.every((item) => !isDue(item, monthly) || answerFits(item, responses[item.id])),

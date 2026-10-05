@@ -1,11 +1,14 @@
 import { randomUUID } from 'node:crypto'
 import { writeFileSync } from 'node:fs'
 import { parseArgs } from 'node:util'
+import { isValidEmail } from '../src/domain/adminUser'
 import { assertNoFirebaseToken, firebaseCliAccount, gcloudAccount } from './lib/accounts'
+import { billingEnabled } from './lib/billing'
 import { readEnvFile, renderEnvFile } from './lib/envFile'
 import { type Firebaserc, readFirebaserc, withAlias, writeFirebaserc } from './lib/firebaserc'
+import { functionsEnvPath, GMAIL_SECRET_NAME, gmailSecretExists } from './lib/functions'
 import { hasRandomSuffix } from './lib/projectId'
-import { confirm } from './lib/prompt'
+import { askText, confirm } from './lib/prompt'
 import { capture, run } from './lib/shell'
 
 const DEFAULT_REGION = 'australia-southeast1'
@@ -18,6 +21,15 @@ const SERVICES = [
   'firebaseappcheck.googleapis.com',
   'recaptchaenterprise.googleapis.com',
   'identitytoolkit.googleapis.com',
+]
+const FUNCTIONS_SERVICES = [
+  'cloudfunctions.googleapis.com',
+  'cloudbuild.googleapis.com',
+  'artifactregistry.googleapis.com',
+  'run.googleapis.com',
+  'eventarc.googleapis.com',
+  'cloudscheduler.googleapis.com',
+  'secretmanager.googleapis.com',
 ]
 const SHEETS_KEY_NAME = 'appliance-checks-sheets-cli'
 const SHEETS_WEB_KEY_NAME = 'appliance-checks-sheets-web'
@@ -360,6 +372,37 @@ function writeEnvValues(
   console.log('  written (it is gitignored)')
 }
 
+async function ensureFunctions(env: string, projectId: string, region: string): Promise<void> {
+  step('Cloud Functions (weekly VSO email)')
+  if (!billingEnabled(projectId)) {
+    console.log(`  warning: billing isn't enabled on ${projectId}, so functions can't deploy; skipping (see #23)`)
+    return
+  }
+
+  console.log(`  APIs: ${FUNCTIONS_SERVICES.join(', ')}`)
+  run('gcloud', ['services', 'enable', ...FUNCTIONS_SERVICES, `--project=${projectId}`])
+
+  if (gmailSecretExists(projectId)) {
+    console.log(`  secret ${GMAIL_SECRET_NAME} already exists`)
+  } else {
+    console.log(`  creating secret ${GMAIL_SECRET_NAME}: paste the Gmail app password when prompted`)
+    run('npx', ['firebase', 'functions:secrets:set', GMAIL_SECRET_NAME, '--project', projectId])
+  }
+
+  const envPath = functionsEnvPath(env)
+  const envValues = readEnvFile(envPath) ?? {}
+  if (envValues.MAIL_FROM) {
+    console.log(`  MAIL_FROM already set in ${envPath}`)
+  } else {
+    const mailFrom = (await askText('  MAIL_FROM (the Gmail address the email is sent from): ')).toLowerCase()
+    if (!isValidEmail(mailFrom)) throw new Error(`"${mailFrom}" is not a valid email address.`)
+    writeFileSync(envPath, renderEnvFile({ ...envValues, MAIL_FROM: mailFrom }))
+    console.log(`  written to ${envPath} (it is gitignored)`)
+  }
+
+  run('npx', ['firebase', 'functions:artifacts:setpolicy', '--location', region, '--force', '--project', projectId])
+}
+
 function writeAlias(env: string, updated: Firebaserc | null): void {
   step(`.firebaserc alias "${env}"`)
   if (updated === null) {
@@ -423,6 +466,7 @@ async function main(): Promise<void> {
   const sheetsWebKey = ensureSheetsWebKey(env, projectId)
   writeEnvValues(env, config, siteKey, sheetsWebKey, debugToken)
   const keyName = ensureSheetsKey(projectId)
+  await ensureFunctions(env, projectId, region)
   writeAlias(env, aliasUpdate)
 
   console.log('\nDone. To use the Sheets API key in this shell:')

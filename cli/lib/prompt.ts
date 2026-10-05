@@ -10,6 +10,15 @@ export async function ask(message: string): Promise<boolean> {
   }
 }
 
+export async function askText(message: string): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout })
+  try {
+    return (await rl.question(message)).trim()
+  } finally {
+    rl.close()
+  }
+}
+
 export async function confirm(message: string): Promise<void> {
   const proceed = await ask(message)
   if (!proceed) {

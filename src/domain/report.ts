@@ -1,4 +1,4 @@
-import { answerFits, isDue, isFrozen, monthlyFor, renderVersion, sectionProgress } from './check'
+import { answerFits, checkPercent, isDue, isFrozen, monthlyFor, renderVersion } from './check'
 import { addDays, checkDatesBetween, currentCheckDate, firstOfNextMonth } from './schedule'
 import type { Appliance, Brigade, Check, CheckSheetVersion, Item } from './types'
 
@@ -155,10 +155,7 @@ export function buildMonthlyReport(args: BuildMonthlyReportArgs): MonthlyReport 
     const monthly = monthlyFor(check, date)
     const responses = check?.responses ?? {}
 
-    const progress = sectionProgress(version.sections, responses, monthly)
-    const due = progress.reduce((sum, section) => sum + section.due.length, 0)
-    const answered = progress.reduce((sum, section) => sum + section.answered, 0)
-    const percent = due > 0 ? Math.floor((answered / due) * 100) : 0
+    const percent = checkPercent(version.sections, responses, monthly)
 
     return { date, check, version: resolvedNumber, monthly, percent }
   })

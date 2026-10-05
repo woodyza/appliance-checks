@@ -1,6 +1,6 @@
 import { FieldValue, type Firestore, Timestamp, type Transaction } from 'firebase-admin/firestore'
 import { generateSlug } from '../../src/domain/slug'
-import type { CheckSheetOrigin, CheckSheetVersion, Section } from '../../src/domain/types'
+import type { BrigadeSettings, CheckSheetOrigin, CheckSheetVersion, Section } from '../../src/domain/types'
 
 const ALREADY_EXISTS = 6
 
@@ -65,6 +65,48 @@ export async function addAppliance(db: Firestore, slug: string, input: AddApplia
     }
     throw error
   }
+}
+
+export interface BrigadeSettingsUpdate {
+  reportEmail?: string | null
+  weeklyEmail?: boolean
+}
+
+export async function updateBrigadeSettings(
+  db: Firestore,
+  slug: string,
+  update: BrigadeSettingsUpdate,
+): Promise<{ before: BrigadeSettings; after: BrigadeSettings }> {
+  const brigadeRef = db.collection('brigades').doc(slug)
+  const settingsRef = brigadeRef.collection('private').doc('settings')
+
+  return db.runTransaction(async (transaction: Transaction) => {
+    const [brigadeSnapshot, settingsSnapshot] = await Promise.all([
+      transaction.get(brigadeRef),
+      transaction.get(settingsRef),
+    ])
+    if (!brigadeSnapshot.exists) {
+      throw new Error(`No brigade found for slug "${slug}".`)
+    }
+
+    const before = (settingsSnapshot.data() ?? {}) as BrigadeSettings
+    const after: BrigadeSettings = { ...before }
+    const fields: Record<string, unknown> = {}
+    if (update.reportEmail === null) {
+      delete after.reportEmail
+      fields.reportEmail = FieldValue.delete()
+    } else if (update.reportEmail !== undefined) {
+      after.reportEmail = update.reportEmail
+      fields.reportEmail = update.reportEmail
+    }
+    if (update.weeklyEmail !== undefined) {
+      after.weeklyEmail = update.weeklyEmail
+      fields.weeklyEmail = update.weeklyEmail
+    }
+
+    transaction.set(settingsRef, fields, { merge: true })
+    return { before, after }
+  })
 }
 
 export async function getCurrentVersion(
