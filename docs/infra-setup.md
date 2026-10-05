@@ -48,7 +48,7 @@ For each project this creates, or checks and skips if it's already there:
 - the default Hosting site
 - the weekly VSO email's functions setup, only if billing is enabled on the project (otherwise it warns and skips these, see #23):
   - the Cloud Functions, Cloud Build, Artifact Registry, Cloud Run, Eventarc, Cloud Scheduler and Secret Manager APIs
-  - the `GMAIL_APP_PASSWORD` secret, prompted for with hidden input if it doesn't exist yet (an existing one is left alone). It's an app password for the dedicated Gmail account, which needs 2-Step Verification on first (Google Account, Security, App passwords)
+  - the `GMAIL_APP_PASSWORD` secret, prompted for with hidden input if it doesn't exist yet (an existing one is left alone). It's an app password for the dedicated Gmail account. Turn on [2-Step Verification](https://myaccount.google.com/signinoptions/twosv) first, then create one at [App passwords](https://myaccount.google.com/apppasswords) (the Security page no longer links to it). Google shows it in four groups of four; paste it without the spaces. To check or replace it later, it's in [Secret Manager](https://console.cloud.google.com/security/secret-manager) for the project
   - `MAIL_FROM`, the sending Gmail address, prompted for if it's missing from `functions/.env.<env>` (gitignored, so the address stays out of this public repo)
   - an Artifact Registry cleanup policy for function images (`firebase functions:artifacts:setpolicy`, 1 day). Before the first functions deploy the repository doesn't exist, so this does nothing until a re-run; the first `make deploy` offers to set one itself
 - a Firebase Web app (`appliance-checks-web`) and its SDK config
