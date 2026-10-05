@@ -149,7 +149,7 @@ function renderText(rows: Row[], heading: string, adminUrl: string): string {
     line(' ', 'Brigade', 'Appliance', 'Completion'),
     ...rows.map((row) => line(row.flagged ? '!' : ' ', row.brigadeName, row.callsign, row.label)),
     '',
-    `! = needs follow-up. Admin: ${adminUrl}`,
+    `! = needs follow-up. Go to brigade admin: ${adminUrl}`,
     '',
   ].join('\n')
 }
@@ -172,7 +172,7 @@ function renderHtml(rows: Row[], heading: string, adminUrl: string): string {
     `<tr>${header}</tr>`,
     body,
     '</table>',
-    `<p><a href="${escapeHtml(adminUrl)}">Open the admin</a></p>`,
+    `<p><a href="${escapeHtml(adminUrl)}">Go to brigade admin</a></p>`,
   ].join('\n')
 }
 
