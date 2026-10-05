@@ -193,7 +193,7 @@ test('keeps typing when a re-read lands mid-edit', async ({ page }) => {
 test('shows the disabled notice for an inactive brigade landing page', async ({ page }) => {
   await page.goto('/e2ezzz')
 
-  await expect(page.locator('.header-callsign')).toHaveText('E2E Inactive Brigade')
+  await expect(page.locator('.header-callsign')).toHaveText('E2E Inactive Brigade Checks')
   await expect(page.locator('.error-msg')).toHaveText('Checks are disabled for this brigade.')
   await expect(page.locator('.appliance-card')).toHaveCount(0)
   await expect(page.locator('.header-back')).toHaveCount(0)

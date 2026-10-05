@@ -60,7 +60,7 @@ onMounted(async () => {
       </router-link>
       <div class="header-titles">
         <div class="header-callsign">
-          {{ brigade?.name ?? 'Appliance Checks' }}
+          {{ brigade ? `${brigade.name} Checks` : 'Appliance Checks' }}
         </div>
       </div>
       <router-link
