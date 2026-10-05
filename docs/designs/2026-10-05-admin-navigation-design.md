@@ -31,7 +31,7 @@ The profile is resolved once per sign-in, so if the superadmin changes someone's
 | Brigade Admin | `/:homeSlug/admin` |
 | `none`, or a Brigade Admin whose `brigadeId` matches no brigade (no `homeSlug`) | `/admin` ("Not authorised", which shows the UID used to bootstrap the superadmin) |
 
-The landing page's "Admin" link, sign-in completion and the signed-in redirect already go through it. A Brigade Admin opening `/admin` is redirected to their home. `/admin/users` has no redirect; non-superadmins get "Not authorised".
+Sign-in completion and the signed-in redirect go through it. The landing page's "Admin" link points at `/admin`, and a Brigade Admin opening `/admin` is redirected to their home. `/admin/users` has no redirect; non-superadmins get "Not authorised".
 
 ## Page gates
 
@@ -88,6 +88,16 @@ Both `/:slug` links stay hidden while the profile loads, so a Brigade Admin neve
 
 - `README.md`: the admin section notes that a Brigade Admin lands on their brigade and a VSO gets a scoped hub.
 - `.env.development`: `VITE_SUPERADMIN_UID`.
+
+## Changes during implementation
+
+- **The landing page's "Admin" link goes to `/admin`** rather than resolving `adminHome()` itself, and relies on the hub's redirect for a Brigade Admin. Same destination, one fewer async path.
+- **The appliance page's "copy from another appliance" picker lists only the person's own brigades** for a Brigade Admin or VSO (all brigades for the superadmin, as before). The design didn't cover it; only the superadmin could reach that page before, and the rules don't let anyone else list all brigades.
+- **On a brigade's admin page, a non-admin gets "Not authorised" without the brigade being read**; for an admin, a missing brigade is "This link isn't valid." and someone else's is "Not authorised".
+- **e2e Brigade Admin and VSO users are seeded on the emulator only**, like the superadmin's Auth user, so dev's User Admin list doesn't fill with fake addresses.
+- **Review follow-ups not applied** (both small, behaviour-changing):
+  - If a Brigade Admin's profile read fails during the `/admin` redirect but succeeds on the hub's retry, they see "Not authorised" rather than being sent to their brigade; a reload fixes it.
+  - The brigade checks page reads the profile once on mount, so after a sign out or account switch in another tab it keeps the old user's "‹ Brigades"/"Manage" links until it's reloaded. The admin pages and rules still check the current user.
 
 ## Out of scope
 

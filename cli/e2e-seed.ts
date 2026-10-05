@@ -1,6 +1,7 @@
 import { parseArgs } from 'node:util'
 import { currentCheckDate, today, weekday } from '../src/domain/schedule'
 import {
+  BRIGADE_ADMIN_EMAIL,
   completeResponses,
   deleteAppliancesAndChecks,
   deleteChecks,
@@ -8,6 +9,8 @@ import {
   firstTwoCheckDaysOfPreviousMonth,
   fixtureCheckSheet,
   fixtureCheckSheetE2e3,
+  VSO_EMAIL,
+  writeAdminUser,
   writeBrigade,
   writeCheck,
   writeApplianceWithoutCheckSheet,
@@ -72,7 +75,11 @@ async function main(): Promise<void> {
   await writeCheck(db, EDITOR_SLUG, 'e2ed3', currentCheckDate(today(), weekday(today())), 1, completeResponses(editor.ids))
 
   // The Auth emulator only: e2e-seed against `dev` uses a real superadmin (see docs/infra-setup.md).
-  if (target === 'emulator') await ensureSuperadminUser(adminAuth())
+  if (target === 'emulator') {
+    await ensureSuperadminUser(adminAuth())
+    await writeAdminUser(db, { email: BRIGADE_ADMIN_EMAIL, role: 'brigadeAdmin', brigadeSlugs: [SLUG] })
+    await writeAdminUser(db, { email: VSO_EMAIL, role: 'vso', brigadeSlugs: [SLUG, INACTIVE_SLUG] })
+  }
 
   console.log(`Seeded brigade "${SLUG}" with appliances e2e1, e2e2, e2e3, inactive brigade "${INACTIVE_SLUG}" with e2ez1, and editor brigade "${EDITOR_SLUG}" with e2ed1-e2ed7.`)
 }

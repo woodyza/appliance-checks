@@ -8,7 +8,11 @@ import {
   type User,
 } from 'firebase/auth'
 import { ref } from 'vue'
+import { getOwnAdminUser, listBrigadesById } from '../data/admin'
+import { type AdminProfile, adminHomePath } from '../domain/adminProfile'
+import type { AdminUser } from '../domain/types'
 import { auth } from '../firebase'
+import { isPermissionDenied } from './permissionDenied'
 
 const STORED_EMAIL_KEY = 'admin-sign-in-email'
 
@@ -26,7 +30,14 @@ const readyPromise = new Promise<User | null>((resolve) => {
 })
 let readySettled = false
 
+let cachedProfile: { uid: string; profile: Promise<AdminProfile> } | null = null
+
+function clearProfileCacheUnless(uid: string | undefined): void {
+  if (cachedProfile && cachedProfile.uid !== uid) cachedProfile = null
+}
+
 onAuthStateChanged(auth, (user) => {
+  clearProfileCacheUnless(user?.uid)
   currentUser.value = user
   if (!readySettled) {
     readySettled = true
@@ -69,6 +80,7 @@ export function clearStoredEmail(): void {
 // doesn't race the auth guard there.
 export async function completeSignIn(email: string, url: string): Promise<User> {
   const credential = await signInWithEmailLink(auth, email, url)
+  clearProfileCacheUnless(credential.user.uid)
   currentUser.value = credential.user
   clearStoredEmail()
   return credential.user
@@ -78,10 +90,53 @@ export async function completeSignIn(email: string, url: string): Promise<User> 
 // that navigates to `/admin/sign-in` next mustn't be redirected back by the signed-in guard.
 export async function signOut(): Promise<void> {
   await firebaseSignOut(auth)
+  cachedProfile = null
   currentUser.value = null
 }
 
-/** Where a signed-in person's admin screens start. The hub for now; role-aware in #12. */
-export function adminHome(): string {
-  return '/admin'
+async function resolveAdminProfile(user: User): Promise<AdminProfile> {
+  const superadminUid = import.meta.env.VITE_SUPERADMIN_UID
+  if (superadminUid && user.uid === superadminUid) return { kind: 'superadmin' }
+  if (!user.email) return { kind: 'none' }
+
+  let adminUser: AdminUser | null
+  try {
+    adminUser = await getOwnAdminUser(user.email.toLowerCase())
+  } catch (error) {
+    if (isPermissionDenied(error)) return { kind: 'none' }
+    throw error
+  }
+  if (!adminUser) return { kind: 'none' }
+
+  if (adminUser.role === 'vso') {
+    return { kind: 'admin', role: 'vso', brigadeIds: adminUser.brigadeIds, homeSlug: null }
+  }
+  const [brigadeId] = adminUser.brigadeIds
+  const home = brigadeId ? (await listBrigadesById([brigadeId]))[0] : undefined
+  if (!home) return { kind: 'none' }
+  return { kind: 'admin', role: 'brigadeAdmin', brigadeIds: adminUser.brigadeIds, homeSlug: home.slug }
+}
+
+/** What the signed-in person may administer, cached per user. Rejects (and retries on the next call) if it can't be read. */
+export function adminProfile(): Promise<AdminProfile> {
+  const user = currentUser.value
+  if (!user) return Promise.reject(new Error('Not signed in.'))
+  if (cachedProfile?.uid === user.uid) return cachedProfile.profile
+
+  const profile = resolveAdminProfile(user)
+  const entry = { uid: user.uid, profile }
+  cachedProfile = entry
+  profile.catch(() => {
+    if (cachedProfile === entry) cachedProfile = null
+  })
+  return profile
+}
+
+/** Where a signed-in person's admin screens start; the hub if their profile can't be read. */
+export async function adminHome(): Promise<string> {
+  try {
+    return adminHomePath(await adminProfile())
+  } catch {
+    return '/admin'
+  }
 }

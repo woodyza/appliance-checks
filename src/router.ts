@@ -21,7 +21,7 @@ export const router = createRouter({
     // Explicit `/admin` routes go before the slug routes, even though `admin` can't match the
     // 6-char slug pattern anyway.
     { path: '/admin/sign-in', component: SignIn, meta: { redirectIfSignedIn: true } },
-    { path: '/admin', component: AdminHub, meta: { requiresAuth: true } },
+    { path: '/admin', component: AdminHub, meta: { requiresAuth: true, hub: true } },
     { path: '/admin/users', component: UserAdminView, meta: { requiresAuth: true } },
     { path: `/:slug(${SLUG_PATTERN})`, component: ApplianceList, sensitive: true },
     {
@@ -70,5 +70,11 @@ router.beforeEach(async (to) => {
     // restoring); `currentUser` itself stays live for any sign-in that happens afterwards.
     await authReady()
     if (!currentUser.value) return '/admin/sign-in'
+
+    // A Brigade Admin has no hub, so `/admin` sends them to their own brigade.
+    if (to.meta.hub) {
+      const home = await adminHome()
+      if (home !== '/admin') return home
+    }
   }
 })

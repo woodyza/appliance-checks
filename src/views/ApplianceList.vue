@@ -2,8 +2,9 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { type ApplianceSummary, getBrigade, listAppliances } from '../data/checks'
+import { type AdminProfile, canManage, hasHub } from '../domain/adminProfile'
 import type { Brigade } from '../domain/types'
-import { currentUser } from '../state/auth'
+import { adminProfile, authReady, currentUser } from '../state/auth'
 
 const route = useRoute()
 const slug = route.params.slug as string
@@ -13,8 +14,24 @@ const appliances = ref<ApplianceSummary[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
 const inactive = computed(() => brigade.value !== null && !brigade.value.active)
+const profile = ref<AdminProfile | null>(null)
+const showBrigades = computed(() => profile.value !== null && hasHub(profile.value))
+const showManage = computed(
+  () => profile.value !== null && brigade.value !== null && canManage(profile.value, brigade.value.brigadeId),
+)
+
+async function loadProfile(): Promise<void> {
+  await authReady()
+  if (!currentUser.value) return
+  try {
+    profile.value = await adminProfile()
+  } catch (err) {
+    console.error(err)
+  }
+}
 
 onMounted(async () => {
+  void loadProfile()
   try {
     const [brigadeDoc, applianceList] = await Promise.all([getBrigade(slug), listAppliances(slug)])
     if (!brigadeDoc) {
@@ -35,7 +52,7 @@ onMounted(async () => {
   <div id="app">
     <header>
       <router-link
-        v-if="currentUser"
+        v-if="showBrigades"
         to="/admin"
         class="header-back header-up"
       >
@@ -47,7 +64,7 @@ onMounted(async () => {
         </div>
       </div>
       <router-link
-        v-if="currentUser && brigade"
+        v-if="showManage"
         :to="`/${slug}/admin`"
         class="header-back header-manage"
       >
