@@ -109,7 +109,7 @@ npm run cli:import-check-sheet -- --project dev --brigade <slug> --appliance 801
 
 Hosting sends `X-Robots-Tag: noindex, nofollow` and serves a `robots.txt` that disallows everything, so well-behaved crawlers don't index the site even if a link leaks.
 
-`make deploy` also deploys the `weeklyVsoEmail` function when billing is enabled on the project (esbuild bundles it into the gitignored `functions/lib/` first), and otherwise skips it with a warning. It replaces Hosting content and Firestore rules. `firestore.indexes.json` is the source of truth for indexes, so if any were created in the console the deploy offers to delete them: answer No unless you mean it.
+`make deploy` also deploys the `weeklyVsoEmail` function when billing is enabled on the project (esbuild bundles it into the gitignored `functions/lib/` first), and otherwise skips it with a warning. If billing is on but provision's functions step hasn't run (no `GMAIL_APP_PASSWORD` secret, or no `MAIL_FROM` in `functions/.env.<env>`), it stops before deploying anything and tells you to run `make provision` first. It replaces Hosting content and Firestore rules. `firestore.indexes.json` is the source of truth for indexes, so if any were created in the console the deploy offers to delete them: answer No unless you mean it.
 
 Appliances and their Check Sheets can also be added in the admin UI instead (`/<slug>/admin`, signed in as the superadmin), including the Google Sheet import.
 

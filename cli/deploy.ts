@@ -3,6 +3,7 @@ import { parseArgs } from 'node:util'
 import { assertNoFirebaseToken, firebaseCliAccount } from './lib/accounts'
 import { billingEnabled } from './lib/billing'
 import { readEnvFile } from './lib/envFile'
+import { missingFunctionsSetup } from './lib/functions'
 import { confirm } from './lib/prompt'
 import { substituteSuperadmin } from './lib/rules'
 import { run } from './lib/shell'
@@ -53,6 +54,17 @@ async function main(): Promise<void> {
     )
   }
 
+  const targets = ['hosting', 'firestore:rules', 'firestore:indexes']
+  if (billingEnabled(projectId)) {
+    const missing = missingFunctionsSetup(env, projectId)
+    if (missing.length > 0) {
+      throw new Error(`Functions aren't set up on ${projectId} (missing ${missing.join(' and ')}): run \`make provision ENV=${env}\` first.`)
+    }
+    targets.push('functions')
+  } else {
+    console.log(`Billing isn't enabled on ${projectId}: skipping functions (see #23).`)
+  }
+
   await confirm(`Deploy to ${env}? [y/N] `)
 
   run('npx', ['vite', 'build', '--mode', env])
@@ -60,13 +72,6 @@ async function main(): Promise<void> {
   mkdirSync('.deploy', { recursive: true })
   writeFileSync(DEPLOY_RULES_PATH, rules)
   writeDeployConfig()
-
-  const targets = ['hosting', 'firestore:rules', 'firestore:indexes']
-  if (billingEnabled(projectId)) {
-    targets.push('functions')
-  } else {
-    console.log(`Billing isn't enabled on ${projectId}: skipping functions (see #23).`)
-  }
 
   run('npx', [
     'firebase', 'deploy',

@@ -127,6 +127,7 @@ The email:
 - **Cleanup policy** only applies once functions have deployed once (review).
 - **`functions/.env*`** is gitignored, since the Firebase CLI can write `functions/.env.<projectId>`, which would leak the project id (review).
 - **Not exercised before the `dev` run**: the provision steps and the deploy's functions branch. Trigger discovery was checked in the functions emulator on Node 26, not the Node 22 runtime.
+- **Deploy checks provision ran**: with billing on, `make deploy` stops before deploying anything if the `GMAIL_APP_PASSWORD` secret or `MAIL_FROM` is missing, since deploying before provision was an easy mistake.
 - **Open follow-up**: logging results as they happen rather than at the end, so a run killed by the timeout still logs what it sent.
 
 ## Out of scope
