@@ -23,7 +23,7 @@ const errorMessage = ref('')
 async function completeFromLink(knownEmail: string): Promise<void> {
   try {
     await completeSignIn(knownEmail, window.location.href)
-    await router.replace(adminHome())
+    await router.replace(await adminHome())
   } catch (error) {
     clearStoredEmail()
     // A later request on this device overwrote the stored email, so ask for the one this link is for.

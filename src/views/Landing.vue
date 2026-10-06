@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { adminHome, currentUser } from '../state/auth'
+import { currentUser } from '../state/auth'
 </script>
 
 <template>
@@ -8,7 +8,7 @@ import { adminHome, currentUser } from '../state/auth'
     <router-link
       v-if="currentUser"
       class="retry-btn"
-      :to="adminHome()"
+      to="/admin"
     >
       Admin
     </router-link>

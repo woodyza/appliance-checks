@@ -12,10 +12,12 @@ import {
   weekday,
 } from '../../src/domain/schedule'
 import { newId } from '../../src/domain/slug'
-import type { Section } from '../../src/domain/types'
+import type { AdminRole, Section } from '../../src/domain/types'
 import { EMULATOR_SUPERADMIN_UID } from './rules'
 
 export const SUPERADMIN_EMAIL = 'e2e-admin@example.com'
+export const BRIGADE_ADMIN_EMAIL = 'e2e-brigade-admin@example.com'
+export const VSO_EMAIL = 'e2e-vso@example.com'
 
 /** Creates the emulator's fixed-UID superadmin user (see `firestore.rules`), skipping if it exists. */
 export async function ensureSuperadminUser(auth: Auth): Promise<void> {
@@ -25,6 +27,29 @@ export async function ensureSuperadminUser(auth: Auth): Promise<void> {
     if ((error as { code?: string }).code !== 'auth/user-not-found') throw error
     await auth.createUser({ uid: EMULATOR_SUPERADMIN_UID, email: SUPERADMIN_EMAIL })
   }
+}
+
+export interface SeedAdminUserInput {
+  email: string
+  role: AdminRole
+  brigadeSlugs: string[]
+}
+
+/** Writes an `adminUsers` doc for the brigades' current `brigadeId`s, so seed the brigades first (each seed run mints new ids). */
+export async function writeAdminUser(db: Firestore, input: SeedAdminUserInput): Promise<void> {
+  const brigadeIds = await Promise.all(
+    input.brigadeSlugs.map(async (slug) => {
+      const snapshot = await db.collection('brigades').doc(slug).get()
+      return snapshot.data()?.brigadeId as string
+    }),
+  )
+  await db.collection('adminUsers').doc(input.email).set({
+    email: input.email,
+    displayName: null,
+    role: input.role,
+    brigadeIds,
+    createdAt: FieldValue.serverTimestamp(),
+  })
 }
 
 export interface FixtureItemIds {

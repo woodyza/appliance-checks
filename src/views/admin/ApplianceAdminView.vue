@@ -13,17 +13,21 @@ import { parseSpreadsheetId, importPrefill } from '../../domain/import/source'
 import { summary } from '../../domain/sheetDiff'
 import { allIds, type DraftOp, uniqueId } from '../../domain/sheetDraft'
 import type { Item, Section } from '../../domain/types'
-import { isPermissionDenied, useAdminGate } from '../../state/adminGate'
+import { isPermissionDenied, listBrigadesFor, loadBrigadeForAdmin, NOT_AUTHORISED, useAdminGate } from '../../state/adminGate'
 import { useSheetEditor } from '../../state/sheetEditor'
 
 const route = useRoute()
 const slug = route.params.slug as string
 const applianceId = route.params.applianceId as string
 
-const gate = useAdminGate()
+const gate = useAdminGate(async (profile) => {
+  const loaded = await loadBrigadeForAdmin(profile, slug)
+  if (loaded === NOT_AUTHORISED || loaded === null) return loaded
+  return { ...loaded, copyBrigades: await listBrigadesFor(profile) }
+}, "Couldn't load this brigade.")
 const editor = useSheetEditor(slug, applianceId)
 
-const brigadeSummary = computed(() => gate.brigades.value.find((entry) => entry.slug === slug) ?? null)
+const brigadeSummary = computed(() => gate.data.value)
 const invalidLink = computed(
   () => !gate.loading.value && !gate.notAuthorised.value && !gate.error.value && !brigadeSummary.value,
 )
@@ -385,7 +389,7 @@ async function importFromSheet(): Promise<void> {
               class="item-select copy-brigade"
             >
               <option
-                v-for="entry in gate.brigades.value"
+                v-for="entry in gate.data.value?.copyBrigades ?? []"
                 :key="entry.slug"
                 :value="entry.slug"
               >

@@ -9,7 +9,7 @@ import { applianceIdProblem, callsignProblem, suggestApplianceId } from '../../d
 import { buildMonthlyReport } from '../../domain/report'
 import { recentMonths, today } from '../../domain/schedule'
 import type { CheckSheetVersion } from '../../domain/types'
-import { isPermissionDenied, useAdminGate } from '../../state/adminGate'
+import { isPermissionDenied, loadBrigadeForAdmin, useAdminGate } from '../../state/adminGate'
 
 interface Toast {
   text: string
@@ -20,7 +20,7 @@ const route = useRoute()
 const router = useRouter()
 const slug = route.params.slug as string
 
-const gate = useAdminGate()
+const gate = useAdminGate((profile) => loadBrigadeForAdmin(profile, slug), "Couldn't load this brigade.")
 
 const appliances = ref<ApplianceSummary[]>([])
 const hasDraft = ref(new Set<string>())
@@ -33,7 +33,11 @@ const selectedMonth = ref(months[1] ?? months[0])
 const downloading = ref(false)
 const toast = ref<Toast | null>(null)
 
-const brigadeSummary = computed(() => gate.brigades.value.find((entry) => entry.slug === slug) ?? null)
+const brigadeSummary = computed(() => gate.data.value)
+const showSignOut = computed(() => {
+  const profile = gate.profile.value
+  return profile?.kind === 'admin' && profile.role === 'brigadeAdmin' && profile.homeSlug === slug
+})
 const invalidLink = computed(
   () => !gate.loading.value && !gate.notAuthorised.value && !gate.error.value && !brigadeSummary.value,
 )
@@ -179,6 +183,7 @@ async function download(): Promise<void> {
   <AdminFrame
     :title="brigadeSummary?.brigade.name ?? 'Brigade admin'"
     :up="{ to: `/${slug}`, label: '‹ Appliances' }"
+    :show-sign-out="showSignOut"
     :loading="gate.loading.value"
     :not-authorised="gate.notAuthorised.value"
     :error="frameError"

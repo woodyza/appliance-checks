@@ -67,7 +67,8 @@ async function main(): Promise<void> {
 
   await confirm(`Deploy to ${env}? [y/N] `)
 
-  run('npx', ['vite', 'build', '--mode', env])
+  // The browser needs the superadmin UID too (the rules substitute it server-side); it overrides `.env.<mode>`.
+  run('npx', ['vite', 'build', '--mode', env], { VITE_SUPERADMIN_UID: superadminUid ?? '' })
 
   mkdirSync('.deploy', { recursive: true })
   writeFileSync(DEPLOY_RULES_PATH, rules)

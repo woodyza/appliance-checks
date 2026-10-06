@@ -4,6 +4,8 @@ import { expect } from './fixtures'
 export const AUTH_EMULATOR_HOST = '127.0.0.1:9099'
 export const EMULATOR_PROJECT_ID = 'demo-appliance-checks'
 export const SUPERADMIN_EMAIL = 'e2e-admin@example.com'
+export const BRIGADE_ADMIN_EMAIL = 'e2e-brigade-admin@example.com'
+export const VSO_EMAIL = 'e2e-vso@example.com'
 
 interface OobCode {
   email: string

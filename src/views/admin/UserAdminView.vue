@@ -1,17 +1,21 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import AdminFrame from '../../components/AdminFrame.vue'
-import { createAdminUser, deleteAdminUser, listAdminUsers, updateAdminUser } from '../../data/admin'
+import { createAdminUser, deleteAdminUser, listAdminUsers, listBrigades, updateAdminUser } from '../../data/admin'
 import { type AdminUserDraft, normaliseAdminUser } from '../../domain/adminUser'
 import type { AdminRole, AdminUser } from '../../domain/types'
-import { isPermissionDenied, useAdminGate } from '../../state/adminGate'
+import { isPermissionDenied, NOT_AUTHORISED, useAdminGate } from '../../state/adminGate'
 
 interface Toast {
   text: string
   isError: boolean
 }
 
-const gate = useAdminGate()
+const gate = useAdminGate(
+  async (profile) => (profile.kind === 'superadmin' ? await listBrigades() : NOT_AUTHORISED),
+  "Couldn't load brigades.",
+)
+const brigades = computed(() => gate.data.value ?? [])
 
 const users = ref<AdminUser[]>([])
 const usersLoading = ref(false)
@@ -39,7 +43,7 @@ function roleLabel(role: AdminRole): string {
 }
 
 function brigadeName(id: string): string {
-  return gate.brigades.value.find((entry) => entry.brigade.brigadeId === id)?.brigade.name ?? id
+  return brigades.value.find((entry) => entry.brigade.brigadeId === id)?.brigade.name ?? id
 }
 
 function brigadeNames(ids: string[]): string {
@@ -223,7 +227,7 @@ async function remove(): Promise<void> {
             Pick a brigade
           </option>
           <option
-            v-for="entry in gate.brigades.value"
+            v-for="entry in brigades"
             :key="entry.brigade.brigadeId"
             :value="entry.brigade.brigadeId"
           >
@@ -235,7 +239,7 @@ async function remove(): Promise<void> {
           class="checkbox-list"
         >
           <label
-            v-for="entry in gate.brigades.value"
+            v-for="entry in brigades"
             :key="entry.brigade.brigadeId"
             class="checkbox-row"
           >
