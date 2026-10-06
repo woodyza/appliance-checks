@@ -4,6 +4,7 @@ import {
   BRIGADE_ADMIN_EMAIL,
   completeResponses,
   deleteAppliancesAndChecks,
+  deleteCreatedBrigades,
   deleteChecks,
   ensureSuperadminUser,
   firstTwoCheckDaysOfPreviousMonth,
@@ -76,6 +77,7 @@ async function main(): Promise<void> {
 
   // The Auth emulator only: e2e-seed against `dev` uses a real superadmin (see docs/infra-setup.md).
   if (target === 'emulator') {
+    await deleteCreatedBrigades(db)
     await ensureSuperadminUser(adminAuth())
     await writeAdminUser(db, { email: BRIGADE_ADMIN_EMAIL, role: 'brigadeAdmin', brigadeSlugs: [SLUG] })
     await writeAdminUser(db, { email: VSO_EMAIL, role: 'vso', brigadeSlugs: [SLUG, INACTIVE_SLUG] })

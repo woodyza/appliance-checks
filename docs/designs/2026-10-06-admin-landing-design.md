@@ -59,6 +59,15 @@ Fields: name (1–60 chars), Check Day (Mon–Sun), active, Report Email (option
 
 - `README.md`: admin section covers the Users/Brigades split and editing brigades in the app.
 
+## Changes during implementation
+
+- **Brigade admin page layout:** on a wide screen, Appliances sits in the left column with Details and Reports stacked on the right. On a phone the order is Details, Appliances, Reports. Each section is its own bordered panel.
+- **Only the superadmin's Save writes `active`.** A Brigade Admin's or VSO's Save leaves it out. Otherwise a value that went stale (eg the superadmin deactivated the brigade meanwhile) would be refused as "Not authorised".
+- **The form also caps Report Email at 254 characters**, matching the rule, so the error says what's wrong.
+- **The new-brigade form starts with no Check Day picked**, so a brigade isn't created on a default day by accident. The user edit screen drops Cancel, since "‹ Users" does the same.
+- **`e2e-seed` deletes brigades named "E2E Created …" on the emulator**, since the brigade spec creates one each run and nothing in the app deletes brigades.
+- **Review follow-up not applied:** someone who opens a brigade's `/:slug/admin` they can't manage (eg a Brigade Admin on another brigade's link) gets "Not authorised" with no header link out. Before this change it had "‹ Appliances". It's edge-case only, and the browser's back button still works.
+
 ## Out of scope
 
 Deleting brigades; Brigade Link rotation; Check Day history; changes to the CLI tools.

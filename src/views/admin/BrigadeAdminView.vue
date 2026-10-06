@@ -1,14 +1,18 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import BrigadeDetailsForm from '../../components/admin/BrigadeDetailsForm.vue'
 import AdminFrame from '../../components/AdminFrame.vue'
 import { ApplianceIdTaken, addAppliance, getDraft, listAllAppliances } from '../../data/checkSheet'
-import { listChecksInMonth } from '../../data/admin'
+import { type BrigadeSummary, getBrigadeSettings, listChecksInMonth, updateBrigade } from '../../data/admin'
 import { type ApplianceSummary, getVersion } from '../../data/checks'
+import { hasBrigadeList } from '../../domain/adminProfile'
 import { applianceIdProblem, callsignProblem, suggestApplianceId } from '../../domain/appliance'
+import type { BrigadeDraft, NormalisedBrigade } from '../../domain/brigade'
 import { buildMonthlyReport } from '../../domain/report'
 import { recentMonths, today } from '../../domain/schedule'
 import type { CheckSheetVersion } from '../../domain/types'
+import { wantsWeeklyEmail } from '../../domain/weeklyEmail'
 import { isPermissionDenied, loadBrigadeForAdmin, useAdminGate } from '../../state/adminGate'
 
 interface Toast {
@@ -38,6 +42,17 @@ const showSignOut = computed(() => {
   const profile = gate.profile.value
   return profile?.kind === 'admin' && profile.role === 'brigadeAdmin' && profile.homeSlug === slug
 })
+// A Brigade Admin has no brigade list to go up to; this page is their admin home.
+const up = computed(() =>
+  gate.profile.value && hasBrigadeList(gate.profile.value) ? { to: '/admin/brigades', label: '‹ Brigades' } : undefined,
+)
+
+const details = ref<BrigadeDraft | null>(null)
+// Bumped on each save so the form re-reads the normalised values.
+const detailsVersion = ref(0)
+const detailsError = ref<string | null>(null)
+const savingDetails = ref(false)
+const activeMode = computed(() => (gate.profile.value?.kind === 'superadmin' ? 'editable' : 'readonly'))
 const invalidLink = computed(
   () => !gate.loading.value && !gate.notAuthorised.value && !gate.error.value && !brigadeSummary.value,
 )
@@ -76,10 +91,47 @@ async function loadDrafts(list: ApplianceSummary[]): Promise<void> {
   }
 }
 
+async function loadDetails(summary: BrigadeSummary): Promise<void> {
+  try {
+    const settings = await getBrigadeSettings(slug)
+    details.value = {
+      name: summary.brigade.name,
+      checkDay: summary.brigade.checkDay,
+      active: summary.brigade.active,
+      reportEmail: settings.reportEmail ?? '',
+      weeklyEmail: wantsWeeklyEmail(settings),
+    }
+  } catch (err) {
+    console.error(err)
+    detailsError.value = "Couldn't load the brigade's details."
+  }
+}
+
+async function saveDetails(fields: NormalisedBrigade): Promise<void> {
+  const summary = brigadeSummary.value
+  if (!summary) return
+  savingDetails.value = true
+  try {
+    const canChangeActive = activeMode.value === 'editable'
+    await updateBrigade(slug, fields, canChangeActive)
+    const active = canChangeActive ? fields.active : summary.brigade.active
+    gate.data.value = { slug, brigade: { ...summary.brigade, name: fields.name, checkDay: fields.checkDay, active } }
+    details.value = { ...fields, active, reportEmail: fields.reportEmail ?? '' }
+    detailsVersion.value++
+    showToast('Saved', false)
+  } catch (err) {
+    console.error(err)
+    showToast(isPermissionDenied(err) ? 'Not authorised.' : "Couldn't save", true)
+  } finally {
+    savingDetails.value = false
+  }
+}
+
 watch(
   () => gate.loading.value,
   async (loading) => {
     if (loading || !brigadeSummary.value) return
+    void loadDetails(brigadeSummary.value)
     try {
       appliances.value = await listAllAppliances(slug)
       selectedApplianceId.value = appliances.value[0]?.id ?? null
@@ -182,140 +234,170 @@ async function download(): Promise<void> {
 <template>
   <AdminFrame
     :title="brigadeSummary?.brigade.name ?? 'Brigade admin'"
-    :up="{ to: `/${slug}`, label: '‹ Appliances' }"
+    :up="up"
     :show-sign-out="showSignOut"
     :loading="gate.loading.value"
     :not-authorised="gate.notAuthorised.value"
     :error="frameError"
   >
-    <main class="admin-page admin-columns">
-      <section class="admin-panel appliances-panel">
-        <div class="picker-heading">
-          Appliances
-        </div>
-        <div class="appliance-table">
-          <router-link
-            v-for="appliance in appliances"
-            :key="appliance.id"
-            :to="`/${slug}/admin/${appliance.id}`"
-            :class="['appliance-row', appliance.active ? '' : 'inactive']"
-          >
-            <span class="appliance-row-callsign">{{ appliance.callsign }}</span>
-            <span class="appliance-row-id">{{ appliance.id }}</span>
-            <span class="appliance-row-active">{{ appliance.active ? 'Active' : 'Inactive' }}</span>
-            <span class="appliance-row-status">{{ sheetStatus(appliance) }}</span>
-          </router-link>
+    <main class="admin-page">
+      <router-link
+        :to="`/${slug}`"
+        class="small-btn new-entry check-entry"
+      >
+        Check entry ›
+      </router-link>
 
-          <div
-            v-if="adding"
-            class="appliance-add"
+      <div class="admin-columns brigade-admin">
+        <section class="admin-panel details-panel">
+          <h2 class="panel-title">
+            Details
+          </h2>
+          <BrigadeDetailsForm
+            v-if="details"
+            :key="detailsVersion"
+            :initial="details"
+            :active="activeMode"
+            submit-label="Save"
+            :saving="savingDetails"
+            @save="saveDetails"
+          />
+          <p
+            v-else-if="detailsError"
+            class="error-msg"
           >
-            <div class="add-fields">
-              <input
-                v-model="newCallsign"
-                type="text"
-                class="cell-input add-callsign"
-                placeholder="Callsign"
-                @keydown.enter.prevent="saveNew"
-              >
-              <input
-                v-model="newId"
-                type="text"
-                class="cell-input add-id"
-                placeholder="Id"
-                @input="idEdited = true; idTaken = false"
-                @keydown.enter.prevent="saveNew"
-              >
-            </div>
-            <p
-              v-if="callsignMessage"
-              class="field-error"
+            {{ detailsError }}
+          </p>
+        </section>
+
+        <section class="admin-panel appliances-panel">
+          <h2 class="panel-title">
+            Appliances
+          </h2>
+          <div class="appliance-table">
+            <router-link
+              v-for="appliance in appliances"
+              :key="appliance.id"
+              :to="`/${slug}/admin/${appliance.id}`"
+              :class="['appliance-row', appliance.active ? '' : 'inactive']"
             >
-              {{ callsignMessage }}
-            </p>
-            <p
-              v-if="idMessage"
-              class="field-error id-error"
+              <span class="appliance-row-callsign">{{ appliance.callsign }}</span>
+              <span class="appliance-row-id">{{ appliance.id }}</span>
+              <span class="appliance-row-active">{{ appliance.active ? 'Active' : 'Inactive' }}</span>
+              <span class="appliance-row-status">{{ sheetStatus(appliance) }}</span>
+            </router-link>
+
+            <div
+              v-if="adding"
+              class="appliance-add"
             >
-              {{ idMessage }}
-            </p>
-            <div class="add-actions">
-              <button
-                class="small-btn primary add-save"
-                :disabled="saving"
-                @click="saveNew"
+              <div class="add-fields">
+                <input
+                  v-model="newCallsign"
+                  type="text"
+                  class="cell-input add-callsign"
+                  placeholder="Callsign"
+                  @keydown.enter.prevent="saveNew"
+                >
+                <input
+                  v-model="newId"
+                  type="text"
+                  class="cell-input add-id"
+                  placeholder="Id"
+                  @input="idEdited = true; idTaken = false"
+                  @keydown.enter.prevent="saveNew"
+                >
+              </div>
+              <p
+                v-if="callsignMessage"
+                class="field-error"
               >
-                Save
-              </button>
-              <button
-                class="small-btn add-cancel"
-                @click="adding = false"
+                {{ callsignMessage }}
+              </p>
+              <p
+                v-if="idMessage"
+                class="field-error id-error"
               >
-                Cancel
-              </button>
+                {{ idMessage }}
+              </p>
+              <div class="add-actions">
+                <button
+                  class="small-btn primary add-save"
+                  :disabled="saving"
+                  @click="saveNew"
+                >
+                  Save
+                </button>
+                <button
+                  class="small-btn add-cancel"
+                  @click="adding = false"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-        <button
-          v-if="!adding"
-          class="small-btn add-appliance"
-          @click="startAdding"
-        >
-          + Add appliance
-        </button>
-      </section>
-
-      <section class="admin-panel reports-panel">
-        <div class="picker-heading">
-          Reports
-        </div>
-        <div class="picker-heading">
-          Appliance
-        </div>
-        <select
-          v-model="selectedApplianceId"
-          class="item-select appliance-select"
-        >
-          <option
-            v-for="appliance in appliances"
-            :key="appliance.id"
-            :value="appliance.id"
+          <button
+            v-if="!adding"
+            class="small-btn add-appliance"
+            @click="startAdding"
           >
-            {{ appliance.callsign }}{{ appliance.active ? '' : ' (inactive)' }}
-          </option>
-        </select>
+            + Add appliance
+          </button>
+        </section>
 
-        <div class="picker-heading">
-          Month
-        </div>
-        <select
-          v-model="selectedMonth"
-          class="item-select month-select"
-        >
-          <option
-            v-for="month in months"
-            :key="month"
-            :value="month"
+        <section class="admin-panel reports-panel">
+          <h2 class="panel-title">
+            Reports
+          </h2>
+          <div class="picker-heading">
+            Appliance
+          </div>
+          <select
+            v-model="selectedApplianceId"
+            class="item-select appliance-select"
           >
-            {{ month }}
-          </option>
-        </select>
+            <option
+              v-for="appliance in appliances"
+              :key="appliance.id"
+              :value="appliance.id"
+            >
+              {{ appliance.callsign }}{{ appliance.active ? '' : ' (inactive)' }}
+            </option>
+          </select>
 
-        <p
-          v-if="noCheckSheet"
-          class="error-msg no-check-sheet"
-        >
-          No Check Sheet yet.
-        </p>
+          <div class="picker-heading">
+            Month
+          </div>
+          <select
+            v-model="selectedMonth"
+            class="item-select month-select"
+          >
+            <option
+              v-for="month in months"
+              :key="month"
+              :value="month"
+            >
+              {{ month }}
+            </option>
+          </select>
 
-        <button
-          class="copy-prev-btn download-btn"
-          :disabled="!canDownload"
-          @click="download"
-        >
-          {{ downloading ? 'Preparing…' : 'Download' }}
-        </button>
-      </section>
+          <p
+            v-if="noCheckSheet"
+            class="error-msg no-check-sheet"
+          >
+            No Check Sheet yet.
+          </p>
+
+          <button
+            class="copy-prev-btn download-btn"
+            :disabled="!canDownload"
+            @click="download"
+          >
+            {{ downloading ? 'Preparing…' : 'Download' }}
+          </button>
+        </section>
+      </div>
     </main>
 
     <div

@@ -2,19 +2,23 @@ import {
   collection,
   type DocumentData,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
-  setDoc,
   updateDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore'
 import { batches } from '../domain/adminProfile'
+import type { NormalisedBrigade } from '../domain/brigade'
 import { firstOfNextMonth } from '../domain/schedule'
-import type { AdminRole, AdminUser, Brigade, Check } from '../domain/types'
+import { generateSlug } from '../domain/slug'
+import type { AdminRole, AdminUser, Brigade, BrigadeSettings, Check } from '../domain/types'
 import { db } from '../firebase'
 
 export interface BrigadeSummary {
@@ -73,8 +77,8 @@ export async function listAdminUsers(): Promise<AdminUser[]> {
   return snapshot.docs.map((snap) => toAdminUser(snap.data())).sort((a, b) => a.email.localeCompare(b.email))
 }
 
-/** The signed-in person's own `adminUsers` doc (the only one a non-superadmin may read), or null if there isn't one. */
-export async function getOwnAdminUser(email: string): Promise<AdminUser | null> {
+/** An `adminUsers` doc, or null if there isn't one. A non-superadmin may only read their own. */
+export async function getAdminUser(email: string): Promise<AdminUser | null> {
   const snap = await getDoc(doc(db, 'adminUsers', email))
   return snap.exists() ? toAdminUser(snap.data()) : null
 }
@@ -86,8 +90,14 @@ export interface AdminUserFields {
   brigadeIds: string[]
 }
 
+export class AdminUserExists extends Error {}
+
 export async function createAdminUser(user: AdminUserFields): Promise<void> {
-  await setDoc(doc(db, 'adminUsers', user.email), { ...user, createdAt: serverTimestamp() })
+  const ref = doc(db, 'adminUsers', user.email)
+  await runTransaction(db, async (tx) => {
+    if ((await tx.get(ref)).exists()) throw new AdminUserExists()
+    tx.set(ref, { ...user, createdAt: serverTimestamp() })
+  })
 }
 
 export async function updateAdminUser(
@@ -99,4 +109,56 @@ export async function updateAdminUser(
 
 export async function deleteAdminUser(email: string): Promise<void> {
   await deleteDoc(doc(db, 'adminUsers', email))
+}
+
+function settingsRef(slug: string) {
+  return doc(db, 'brigades', slug, 'private', 'settings')
+}
+
+export async function getBrigadeSettings(slug: string): Promise<BrigadeSettings> {
+  const snap = await getDoc(settingsRef(slug))
+  return snap.exists() ? (snap.data() as BrigadeSettings) : {}
+}
+
+class SlugTaken extends Error {}
+
+const SLUG_ATTEMPTS = 5
+
+/** Creates an active brigade under a fresh Brigade Link slug, and returns the slug. */
+export async function createBrigade(fields: NormalisedBrigade): Promise<string> {
+  const brigade: Brigade = { brigadeId: crypto.randomUUID(), name: fields.name, checkDay: fields.checkDay, active: true }
+  const settings: BrigadeSettings = { weeklyEmail: fields.weeklyEmail }
+  if (fields.reportEmail !== null) settings.reportEmail = fields.reportEmail
+
+  for (let attempt = 0; attempt < SLUG_ATTEMPTS; attempt++) {
+    const slug = generateSlug()
+    const ref = doc(db, 'brigades', slug)
+    try {
+      await runTransaction(db, async (tx) => {
+        if ((await tx.get(ref)).exists()) throw new SlugTaken()
+        tx.set(ref, brigade)
+        tx.set(settingsRef(slug), settings)
+      })
+      return slug
+    } catch (err) {
+      if (!(err instanceof SlugTaken)) throw err
+    }
+  }
+  throw new Error(`Could not generate a unique brigade slug after ${String(SLUG_ATTEMPTS)} attempts.`)
+}
+
+/** Saves the brigade's details and settings; `active` only when `includeActive` (the rules let only the superadmin change it). */
+export async function updateBrigade(slug: string, fields: NormalisedBrigade, includeActive: boolean): Promise<void> {
+  const batch = writeBatch(db)
+  batch.update(doc(db, 'brigades', slug), {
+    name: fields.name,
+    checkDay: fields.checkDay,
+    ...(includeActive ? { active: fields.active } : {}),
+  })
+  batch.set(
+    settingsRef(slug),
+    { reportEmail: fields.reportEmail ?? deleteField(), weeklyEmail: fields.weeklyEmail },
+    { merge: true },
+  )
+  await batch.commit()
 }

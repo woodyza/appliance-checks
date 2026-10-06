@@ -420,7 +420,6 @@ describe('superadmin', () => {
   })
 
   it.each([
-    ['brigade', BRIGADE_PATH, { name: 'x' }],
     ['appliance', APPLIANCE_PATH, { callsign: 'x' }],
     ['version', VERSION_PATH, { version: 2 }],
   ])('denies writing to %s', async (_name, path, data) => {
@@ -677,5 +676,109 @@ describe('check sheet editor', () => {
   it('denies reading and writing other private docs as an assigned admin', async () => {
     await assertFails(jo().doc(`${SHEETED_PATH}/private/other`).get())
     await assertFails(jo().doc(`${SHEETED_PATH}/private/other`).set({ x: 2 }))
+  })
+})
+
+describe('brigade details', () => {
+  const NEW_PATH = 'brigades/n3wbrg'
+  const EDIT_PATH = 'brigades/edt234'
+  const EDIT_SETTINGS_PATH = `${EDIT_PATH}/private/settings`
+  const NEW_BRIGADE = { brigadeId: 'b9', name: 'New Brigade', checkDay: 3, active: true }
+  const EDIT_BRIGADE = { brigadeId: 'b1', name: 'Edit Brigade', checkDay: 1, active: true }
+
+  function jo(): firebase.firestore.Firestore {
+    return adminDb('jo@example.com')
+  }
+
+  function sam(): firebase.firestore.Firestore {
+    return adminDb('sam@example.com')
+  }
+
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore()
+      await db.doc(NEW_PATH).delete()
+      await db.doc(`${NEW_PATH}/private/settings`).delete()
+      await db.doc(EDIT_PATH).set(EDIT_BRIGADE)
+      await db.doc(EDIT_SETTINGS_PATH).set({ reportEmail: 'team@example.com' })
+    })
+  })
+
+  it('allows the superadmin to create a brigade and its settings together', async () => {
+    const db = superadminDb()
+    const batch = db.batch()
+    batch.set(db.doc(NEW_PATH), NEW_BRIGADE)
+    batch.set(db.doc(`${NEW_PATH}/private/settings`), { weeklyEmail: true })
+    await assertSucceeds(batch.commit())
+  })
+
+  it('denies an assigned admin creating a brigade', async () => {
+    await assertFails(jo().doc(NEW_PATH).set({ ...NEW_BRIGADE, brigadeId: 'b1' }))
+  })
+
+  it.each([
+    ['active false', NEW_PATH, { ...NEW_BRIGADE, active: false }],
+    ['an extra key', NEW_PATH, { ...NEW_BRIGADE, extra: 1 }],
+    ['a Check Day of 8', NEW_PATH, { ...NEW_BRIGADE, checkDay: 8 }],
+    ['an empty name', NEW_PATH, { ...NEW_BRIGADE, name: '' }],
+    ['a slug outside the slug pattern', 'brigades/ABC123', NEW_BRIGADE],
+  ])('denies the superadmin creating a brigade with %s', async (_name, path, data) => {
+    await assertFails(superadminDb().doc(path).set(data))
+  })
+
+  it("allows an assigned admin to change the brigade's name and Check Day", async () => {
+    await assertSucceeds(jo().doc(EDIT_PATH).update({ name: 'Renamed', checkDay: 5 }))
+  })
+
+  it.each([
+    ['a Check Day of 0', { checkDay: 0 }],
+    ['an empty name', { name: '' }],
+    ['an extra key', { extra: 1 }],
+  ])('denies the superadmin updating a brigade with %s', async (_name, data) => {
+    await assertFails(superadminDb().doc(EDIT_PATH).update(data))
+  })
+
+  it('denies an unassigned admin updating the brigade', async () => {
+    await assertFails(sam().doc(EDIT_PATH).update({ name: 'Renamed' }))
+  })
+
+  it('denies an assigned admin deactivating the brigade, but allows the superadmin', async () => {
+    await assertFails(jo().doc(EDIT_PATH).update({ active: false }))
+    await assertSucceeds(superadminDb().doc(EDIT_PATH).update({ active: false }))
+  })
+
+  it("denies changing a brigade's brigadeId, even as the superadmin", async () => {
+    await assertFails(superadminDb().doc(EDIT_PATH).update({ brigadeId: 'b2' }))
+  })
+
+  it('denies deleting a brigade, even as the superadmin', async () => {
+    await assertFails(superadminDb().doc(EDIT_PATH).delete())
+  })
+
+  it('allows an assigned admin to read and write the settings', async () => {
+    await assertSucceeds(jo().doc(EDIT_SETTINGS_PATH).get())
+    await assertSucceeds(jo().doc(EDIT_SETTINGS_PATH).set({ reportEmail: 'new@example.com', weeklyEmail: false }))
+  })
+
+  it('allows an assigned admin to clear the Report Email', async () => {
+    await assertSucceeds(
+      jo()
+        .doc(EDIT_SETTINGS_PATH)
+        .set({ reportEmail: firebase.firestore.FieldValue.delete(), weeklyEmail: true }, { merge: true }),
+    )
+  })
+
+  it('denies an unassigned admin reading or writing the settings', async () => {
+    await assertFails(sam().doc(EDIT_SETTINGS_PATH).get())
+    await assertFails(sam().doc(EDIT_SETTINGS_PATH).set({ weeklyEmail: false }))
+  })
+
+  it.each([
+    ['an extra key', { weeklyEmail: true, extra: 1 }],
+    ['a non-boolean weeklyEmail', { weeklyEmail: 'yes' }],
+    ['a non-string reportEmail', { reportEmail: 1 }],
+    ['a reportEmail over 254 characters', { reportEmail: `${'x'.repeat(250)}@a.nz` }],
+  ])('denies settings with %s', async (_name, data) => {
+    await assertFails(jo().doc(EDIT_SETTINGS_PATH).set(data))
   })
 })

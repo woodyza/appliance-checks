@@ -8,7 +8,7 @@ import {
   type User,
 } from 'firebase/auth'
 import { ref } from 'vue'
-import { getOwnAdminUser, listBrigadesById } from '../data/admin'
+import { getAdminUser, listBrigadesById } from '../data/admin'
 import { type AdminProfile, adminHomePath } from '../domain/adminProfile'
 import type { AdminUser } from '../domain/types'
 import { auth } from '../firebase'
@@ -101,7 +101,7 @@ async function resolveAdminProfile(user: User): Promise<AdminProfile> {
 
   let adminUser: AdminUser | null
   try {
-    adminUser = await getOwnAdminUser(user.email.toLowerCase())
+    adminUser = await getAdminUser(user.email.toLowerCase())
   } catch (error) {
     if (isPermissionDenied(error)) return { kind: 'none' }
     throw error

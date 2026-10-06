@@ -4,8 +4,11 @@ import { adminHome, authReady, currentUser, isSignInLink } from './state/auth'
 import ApplianceAdminView from './views/admin/ApplianceAdminView.vue'
 import AdminHub from './views/admin/AdminHub.vue'
 import BrigadeAdminView from './views/admin/BrigadeAdminView.vue'
+import BrigadeListView from './views/admin/BrigadeListView.vue'
+import BrigadeNewView from './views/admin/BrigadeNewView.vue'
 import SignIn from './views/admin/SignIn.vue'
 import UserAdminView from './views/admin/UserAdminView.vue'
+import UserEditView from './views/admin/UserEditView.vue'
 import ApplianceList from './views/ApplianceList.vue'
 import CheckView from './views/CheckView.vue'
 import Landing from './views/Landing.vue'
@@ -23,6 +26,10 @@ export const router = createRouter({
     { path: '/admin/sign-in', component: SignIn, meta: { redirectIfSignedIn: true } },
     { path: '/admin', component: AdminHub, meta: { requiresAuth: true, hub: true } },
     { path: '/admin/users', component: UserAdminView, meta: { requiresAuth: true } },
+    { path: '/admin/users/new', component: UserEditView, meta: { requiresAuth: true } },
+    { path: '/admin/users/:email', component: UserEditView, meta: { requiresAuth: true } },
+    { path: '/admin/brigades', component: BrigadeListView, meta: { requiresAuth: true, brigadeList: true } },
+    { path: '/admin/brigades/new', component: BrigadeNewView, meta: { requiresAuth: true } },
     { path: `/:slug(${SLUG_PATTERN})`, component: ApplianceList, sensitive: true },
     {
       // The static `admin` segment outranks `/:slug/:applianceId`'s param, so this shadows an
@@ -71,10 +78,12 @@ router.beforeEach(async (to) => {
     await authReady()
     if (!currentUser.value) return '/admin/sign-in'
 
-    // A Brigade Admin has no hub, so `/admin` sends them to their own brigade.
-    if (to.meta.hub) {
+    // Only the superadmin has the hub, and a Brigade Admin has no brigade list, so each is sent
+    // to their own home instead.
+    if (to.meta.hub || to.meta.brigadeList) {
       const home = await adminHome()
-      if (home !== '/admin') return home
+      if (to.meta.hub && home !== '/admin') return home
+      if (to.meta.brigadeList && home !== '/admin' && home !== '/admin/brigades') return home
     }
   }
 })

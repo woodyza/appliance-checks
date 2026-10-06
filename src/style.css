@@ -549,7 +549,7 @@ header {
   pointer-events: none;
 }
 
-/* Checkbox list (User admin brigade picker) */
+/* Checkbox list (user and brigade forms) */
 .checkbox-list {
   display: flex;
   flex-direction: column;
@@ -778,6 +778,43 @@ header {
 }
 .add-appliance {
   align-self: flex-start;
+}
+.new-entry {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+/* Brigade admin page: Details and Reports stacked beside the wider Appliances panel */
+.brigade-admin {
+  grid-template-areas:
+    'appliances details'
+    'appliances reports';
+}
+.brigade-admin .admin-panel {
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+}
+.details-panel {
+  grid-area: details;
+}
+.appliances-panel {
+  grid-area: appliances;
+}
+.reports-panel {
+  grid-area: reports;
+}
+.panel-title {
+  margin: 0 0 4px;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.brigade-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .field-error {
@@ -1227,6 +1264,9 @@ select.cell-input {
   .admin-columns,
   .editor-layout {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .brigade-admin {
+    grid-template-areas: 'details' 'appliances' 'reports';
   }
   .editor-sidebar {
     position: static;
