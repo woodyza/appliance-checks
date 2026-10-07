@@ -45,6 +45,7 @@ async function save(brigade: NormalisedBrigade): Promise<void> {
       <BrigadeDetailsForm
         :initial="initial"
         active="hidden"
+        show-settings
         submit-label="Create"
         :saving="saving"
         @save="save"

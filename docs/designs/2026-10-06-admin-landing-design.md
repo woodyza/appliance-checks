@@ -24,12 +24,15 @@ Splits the admin hub into Users and Brigades, moves the User Admin form onto its
 
 Fields: name (1–60 chars), Check Day (Mon–Sun), active, Report Email (optional; trimmed, lower-cased, validated with `isValidEmail`; blank clears it, so the weekly email goes to the brigade's VSOs as today), weekly email on/off (default on).
 
-| | superadmin | the brigade's Brigade Admin / VSO | anyone else |
-|---|---|---|---|
-| create a brigade | yes | no | no |
-| edit name, Check Day, settings | yes | yes | no |
-| change `active` | yes | no (shown read-only) | no |
-| delete | no | no | no |
+| | superadmin | the brigade's VSO | the brigade's Brigade Admin | anyone else |
+|---|---|---|---|---|
+| create a brigade | yes | no | no | no |
+| edit name, Check Day | yes | yes | yes | no |
+| see and edit Report Email, weekly email | yes | yes | no (hidden) | no |
+| change `active` | yes | no (shown read-only) | no (shown read-only) | no |
+| delete | no | no | no | no |
+
+**Report settings are for VSOs and the superadmin.** Where and whether a brigade's reports are emailed is the regional team's call, not the brigade's. This is the first power a VSO has that a Brigade Admin doesn't, so the rules read `role` for the first time (the #2 design kept it a label only). That's safe because only the superadmin writes `adminUsers`.
 
 **No delete, only deactivate.** Firestore doesn't cascade, so a delete would orphan appliances, Checks and Check Sheet versions, and lose history the Monthly Reports need.
 
@@ -43,16 +46,16 @@ Fields: name (1–60 chars), Check Day (Mon–Sun), active, Report Email (option
   - `create`: superadmin; slug matches the slug pattern; keys exactly `brigadeId`, `name`, `checkDay`, `active`; `brigadeId` a non-empty string, `name` 1–60 chars, `checkDay` an int 1–7, `active == true`.
   - `update`: `isBrigadeAdmin(slug)`; same shape; `brigadeId` unchanged; `active` unchanged unless superadmin.
   - `delete`: denied.
-- `brigades/{slug}/private/settings`: `read`, `create`, `update` for `isBrigadeAdmin(slug)`; writes may only hold `reportEmail` (string, ≤ 254 chars) and `weeklyEmail` (bool). `delete` denied. The weekly email function reads it with the Admin SDK, unaffected.
+- `brigades/{slug}/private/settings`: `read`, `create`, `update` for `isBrigadeVso(slug)` (the superadmin, or an `isBrigadeAdmin(slug)` whose `adminUsers` doc has `role == 'vso'`); writes may only hold `reportEmail` (string, ≤ 254 chars) and `weeklyEmail` (bool). `delete` denied. The weekly email function reads it with the Admin SDK, unaffected.
 
 ## Testing
 
-- Rules: brigade create (superadmin allowed; VSO denied; bad shape or `active: false` denied), update (own admin allowed; other admin denied; `brigadeId` change denied; `active` change denied for an admin, allowed for superadmin), settings (own admin read/write allowed; anonymous and other admin denied; extra key denied).
+- Rules: brigade create (superadmin allowed; VSO denied; bad shape or `active: false` denied), update (own admin allowed; other admin denied; `brigadeId` change denied; `active` change denied for an admin, allowed for superadmin), settings (own VSO read/write allowed; own Brigade Admin, anonymous and other admin denied; extra key denied).
 - Unit: the brigade form's validation and normalisation; admin home for each profile.
 - E2E:
   - User admin moves to list → new/edit screens: add, refuse a duplicate, edit, remove.
   - Superadmin creates a brigade, edits its details and settings, deactivates it.
-  - Brigade Admin edits their brigade's settings and sees `active` read-only; a row's "Checks" opens that appliance's check entry. Checks is disabled for an inactive brigade's appliance and for one with no Check Sheet.
+  - Brigade Admin doesn't see the report settings, sees `active` read-only, and can still save; a VSO sets the Report Email and weekly email. A row's "Checks" opens that appliance's check entry. Checks is disabled for an inactive brigade's appliance and for one with no Check Sheet.
   - Navigation specs follow hub → Brigades; a VSO lands on `/admin/brigades`.
 
 ## Doc changes
@@ -66,6 +69,7 @@ Fields: name (1–60 chars), Check Day (Mon–Sun), active, Report Email (option
 - **The form also caps Report Email at 254 characters**, matching the rule, so the error says what's wrong.
 - **The new-brigade form starts with no Check Day picked**, so a brigade isn't created on a default day by accident. The user edit screen drops Cancel, since "‹ Users" does the same.
 - **`e2e-seed` deletes brigades named "E2E Created …" on the emulator**, since the brigade spec creates one each run and nothing in the app deletes brigades.
+- **Report settings became VSO and superadmin only** after the first review. The approved design let a Brigade Admin edit them too. They're now hidden from a Brigade Admin, and the rules read `role` to enforce it (see Brigade Details).
 - **Per-row "Checks" and "Edit" replaced the page's "Check entry ›" button** after a look at the built page. Each appliance row now has both actions, and the row itself is no longer a link. Settled with mockups.
 - **Positive actions are green app-wide**, using the app's existing Y colour, for consistency:
   - The editor's filled primary buttons (Publish, Copy, Import, the add-appliance Save) are green.

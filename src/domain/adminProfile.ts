@@ -23,6 +23,11 @@ export function canManage(profile: AdminProfile, brigadeId: string): boolean {
   return profile.kind === 'admin' && profile.brigadeIds.includes(brigadeId)
 }
 
+/** Whether the person controls where and whether a brigade they manage has its reports emailed: not a Brigade Admin. */
+export function canManageBrigadeSettings(profile: AdminProfile): boolean {
+  return profile.kind === 'superadmin' || (profile.kind === 'admin' && profile.role === 'vso')
+}
+
 export function batches<T>(items: T[], size: number): T[][] {
   const result: T[][] = []
   for (let index = 0; index < items.length; index += size) result.push(items.slice(index, index + size))

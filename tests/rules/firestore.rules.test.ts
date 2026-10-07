@@ -694,9 +694,20 @@ describe('brigade details', () => {
     return adminDb('sam@example.com')
   }
 
+  // A VSO assigned to the same brigade as jo, the Brigade Admin.
+  function vic(): firebase.firestore.Firestore {
+    return adminDb('vic@example.com')
+  }
+
   beforeEach(async () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
       const db = context.firestore()
+      await db.doc('adminUsers/vic@example.com').set({
+        email: 'vic@example.com',
+        displayName: null,
+        role: 'vso',
+        brigadeIds: ['b1'],
+      })
       await db.doc(NEW_PATH).delete()
       await db.doc(`${NEW_PATH}/private/settings`).delete()
       await db.doc(EDIT_PATH).set(EDIT_BRIGADE)
@@ -755,20 +766,25 @@ describe('brigade details', () => {
     await assertFails(superadminDb().doc(EDIT_PATH).delete())
   })
 
-  it('allows an assigned admin to read and write the settings', async () => {
-    await assertSucceeds(jo().doc(EDIT_SETTINGS_PATH).get())
-    await assertSucceeds(jo().doc(EDIT_SETTINGS_PATH).set({ reportEmail: 'new@example.com', weeklyEmail: false }))
+  it('allows an assigned VSO to read and write the settings', async () => {
+    await assertSucceeds(vic().doc(EDIT_SETTINGS_PATH).get())
+    await assertSucceeds(vic().doc(EDIT_SETTINGS_PATH).set({ reportEmail: 'new@example.com', weeklyEmail: false }))
   })
 
-  it('allows an assigned admin to clear the Report Email', async () => {
+  it("denies the brigade's Brigade Admin reading or writing the settings", async () => {
+    await assertFails(jo().doc(EDIT_SETTINGS_PATH).get())
+    await assertFails(jo().doc(EDIT_SETTINGS_PATH).set({ weeklyEmail: false }))
+  })
+
+  it('allows an assigned VSO to clear the Report Email', async () => {
     await assertSucceeds(
-      jo()
+      vic()
         .doc(EDIT_SETTINGS_PATH)
         .set({ reportEmail: firebase.firestore.FieldValue.delete(), weeklyEmail: true }, { merge: true }),
     )
   })
 
-  it('denies an unassigned admin reading or writing the settings', async () => {
+  it('denies an unassigned VSO reading or writing the settings', async () => {
     await assertFails(sam().doc(EDIT_SETTINGS_PATH).get())
     await assertFails(sam().doc(EDIT_SETTINGS_PATH).set({ weeklyEmail: false }))
   })
@@ -779,6 +795,6 @@ describe('brigade details', () => {
     ['a non-string reportEmail', { reportEmail: 1 }],
     ['a reportEmail over 254 characters', { reportEmail: `${'x'.repeat(250)}@a.nz` }],
   ])('denies settings with %s', async (_name, data) => {
-    await assertFails(jo().doc(EDIT_SETTINGS_PATH).set(data))
+    await assertFails(vic().doc(EDIT_SETTINGS_PATH).set(data))
   })
 })

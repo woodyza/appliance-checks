@@ -147,18 +147,26 @@ export async function createBrigade(fields: NormalisedBrigade): Promise<string> 
   throw new Error(`Could not generate a unique brigade slug after ${String(SLUG_ATTEMPTS)} attempts.`)
 }
 
-/** Saves the brigade's details and settings; `active` only when `includeActive` (the rules let only the superadmin change it). */
-export async function updateBrigade(slug: string, fields: NormalisedBrigade, includeActive: boolean): Promise<void> {
+export interface BrigadeUpdateScope {
+  /** The rules let only the superadmin change `active`. */
+  active: boolean
+  /** The rules keep the settings from a Brigade Admin. */
+  settings: boolean
+}
+
+export async function updateBrigade(slug: string, fields: NormalisedBrigade, scope: BrigadeUpdateScope): Promise<void> {
   const batch = writeBatch(db)
   batch.update(doc(db, 'brigades', slug), {
     name: fields.name,
     checkDay: fields.checkDay,
-    ...(includeActive ? { active: fields.active } : {}),
+    ...(scope.active ? { active: fields.active } : {}),
   })
-  batch.set(
-    settingsRef(slug),
-    { reportEmail: fields.reportEmail ?? deleteField(), weeklyEmail: fields.weeklyEmail },
-    { merge: true },
-  )
+  if (scope.settings) {
+    batch.set(
+      settingsRef(slug),
+      { reportEmail: fields.reportEmail ?? deleteField(), weeklyEmail: fields.weeklyEmail },
+      { merge: true },
+    )
+  }
   await batch.commit()
 }

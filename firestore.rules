@@ -68,6 +68,13 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/brigades/$(slug)).data.brigadeId in adminBrigadeIds());
     }
 
+    // Where and whether a brigade's reports are emailed is for its VSOs and the superadmin, not
+    // its Brigade Admin: the one place the rules read `role`, which only the superadmin writes.
+    function isBrigadeVso(slug) {
+      return isSuperadmin() || (isBrigadeAdmin(slug)
+        && get(/databases/$(database)/documents/adminUsers/$(adminEmail())).data.role == 'vso');
+    }
+
     function applianceDocPath(slug, applianceId) {
       return /databases/$(database)/documents/brigades/$(slug)/appliances/$(applianceId);
     }
@@ -122,8 +129,8 @@ service cloud.firestore {
       allow delete: if false;
 
       match /private/settings {
-        allow read: if isBrigadeAdmin(slug);
-        allow create, update: if isBrigadeAdmin(slug)
+        allow read: if isBrigadeVso(slug);
+        allow create, update: if isBrigadeVso(slug)
           && request.resource.data.keys().hasOnly(['reportEmail', 'weeklyEmail'])
           && (!('reportEmail' in request.resource.data)
             || (request.resource.data.reportEmail is string && request.resource.data.reportEmail.size() <= 254))

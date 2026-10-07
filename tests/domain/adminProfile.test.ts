@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { type AdminProfile, adminHomePath, batches, canManage, hasBrigadeList } from '../../src/domain/adminProfile'
+import {
+  type AdminProfile,
+  adminHomePath,
+  batches,
+  canManage,
+  canManageBrigadeSettings,
+  hasBrigadeList,
+} from '../../src/domain/adminProfile'
 
 const superadmin: AdminProfile = { kind: 'superadmin' }
 const vso: AdminProfile = { kind: 'admin', role: 'vso', brigadeIds: ['b1', 'b2'], homeSlug: 'abc123' }
@@ -53,6 +60,17 @@ describe('canManage', () => {
 
   it('stops someone with no admin profile', () => {
     expect(canManage(none, 'b1')).toBe(false)
+  })
+})
+
+describe('canManageBrigadeSettings', () => {
+  it.each([
+    ['a superadmin', superadmin, true],
+    ['a VSO', vso, true],
+    ['a Brigade Admin', brigadeAdmin('abc123'), false],
+    ['no admin profile', none, false],
+  ])('for %s is %s', (_label, profile, expected) => {
+    expect(canManageBrigadeSettings(profile)).toBe(expected)
   })
 })
 
