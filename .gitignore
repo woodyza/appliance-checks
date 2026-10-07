@@ -16,3 +16,5 @@ playwright-report/
 .emulator-data/
 functions/lib/
 functions/.env*
+.scratchpad/
+docs/plans/
