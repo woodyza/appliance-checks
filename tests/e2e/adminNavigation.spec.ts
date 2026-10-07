@@ -11,7 +11,9 @@ test('a Brigade Admin starts at their brigade and moves between its pages', asyn
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
   await expect(page.locator('.header-up')).toHaveCount(0)
 
-  await page.locator('.check-entry').click()
+  await page.locator('.appliance-row', { hasText: 'E2E 1' }).locator('.row-checks').click()
+  await expect(page).toHaveURL(/^http:\/\/localhost:5173\/e2etst\/e2e1/)
+  await page.getByRole('button', { name: 'Switch' }).click()
   await expect(page).toHaveURL('/e2etst')
   await expect(page.locator('.header-manage')).toBeVisible()
   await expect(page.locator('.header-up')).toHaveCount(0)
@@ -48,8 +50,9 @@ test('a VSO starts at a list of their brigades and has no user admin', async ({ 
   await expect(page.locator('.header-callsign')).toHaveText('E2E Test Brigade')
   await expect(page.getByRole('button', { name: 'Sign out' })).toHaveCount(0)
 
-  await page.locator('.check-entry').click()
-  await expect(page).toHaveURL('/e2etst')
+  await page.locator('.appliance-row', { hasText: 'E2E 1' }).locator('.row-edit').click()
+  await expect(page).toHaveURL('/e2etst/admin/e2e1')
+  await page.goto('/e2etst')
   await expect(page.locator('.header-up')).toHaveAttribute('href', '/admin/brigades')
   await page.locator('.header-manage').click()
   await page.locator('.header-up', { hasText: '‹ Brigades' }).click()

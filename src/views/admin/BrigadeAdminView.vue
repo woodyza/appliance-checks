@@ -75,6 +75,13 @@ function showToast(text: string, isError: boolean): void {
   }, 4000)
 }
 
+// Check entry refuses an inactive brigade or appliance, and has nothing to show without a Check Sheet.
+function canRunChecks(appliance: ApplianceSummary): boolean {
+  return (
+    brigadeSummary.value?.brigade.active === true && appliance.active && appliance.currentCheckSheetVersion !== null
+  )
+}
+
 function sheetStatus(appliance: ApplianceSummary): string {
   if (draftsUnknown.value) return "Couldn't check"
   if (hasDraft.value.has(appliance.id)) return 'Unpublished changes'
@@ -241,13 +248,6 @@ async function download(): Promise<void> {
     :error="frameError"
   >
     <main class="admin-page">
-      <router-link
-        :to="`/${slug}`"
-        class="small-btn new-entry check-entry"
-      >
-        Check entry ›
-      </router-link>
-
       <div class="admin-columns brigade-admin">
         <section class="admin-panel details-panel">
           <h2 class="panel-title">
@@ -275,17 +275,39 @@ async function download(): Promise<void> {
             Appliances
           </h2>
           <div class="appliance-table">
-            <router-link
+            <div
               v-for="appliance in appliances"
               :key="appliance.id"
-              :to="`/${slug}/admin/${appliance.id}`"
               :class="['appliance-row', appliance.active ? '' : 'inactive']"
             >
               <span class="appliance-row-callsign">{{ appliance.callsign }}</span>
               <span class="appliance-row-id">{{ appliance.id }}</span>
               <span class="appliance-row-active">{{ appliance.active ? 'Active' : 'Inactive' }}</span>
               <span class="appliance-row-status">{{ sheetStatus(appliance) }}</span>
-            </router-link>
+              <span class="appliance-row-actions">
+                <router-link
+                  v-if="canRunChecks(appliance)"
+                  :to="`/${slug}/${appliance.id}`"
+                  class="small-btn new-entry positive row-checks"
+                >
+                  Checks
+                </router-link>
+                <button
+                  v-else
+                  type="button"
+                  class="small-btn positive row-checks"
+                  disabled
+                >
+                  Checks
+                </button>
+                <router-link
+                  :to="`/${slug}/admin/${appliance.id}`"
+                  class="small-btn new-entry row-edit"
+                >
+                  Edit
+                </router-link>
+              </span>
+            </div>
 
             <div
               v-if="adding"
@@ -339,7 +361,7 @@ async function download(): Promise<void> {
           </div>
           <button
             v-if="!adding"
-            class="small-btn add-appliance"
+            class="small-btn positive add-appliance"
             @click="startAdding"
           >
             + Add appliance
@@ -390,7 +412,7 @@ async function download(): Promise<void> {
           </p>
 
           <button
-            class="copy-prev-btn download-btn"
+            class="action-btn positive download-btn"
             :disabled="!canDownload"
             @click="download"
           >

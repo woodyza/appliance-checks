@@ -48,9 +48,7 @@ test("reaches an inactive brigade's Brigade Admin page from the brigade list", a
   await page.locator('.appliance-card', { hasText: 'E2E Inactive Brigade (inactive)' }).click()
   await expect(page).toHaveURL('/e2ezzz/admin')
   await expect(page.locator('.appliance-select')).toContainText('E2E Z1')
-  await page.locator('.check-entry').click()
-  await expect(page).toHaveURL('/e2ezzz')
-  await expect(page.locator('.error-msg')).toHaveText('Checks are disabled for this brigade.')
+  await expect(page.locator('.appliance-row', { hasText: 'E2E Z1' }).locator('.row-checks')).toBeDisabled()
 })
 
 test('navigates up from every admin screen, and back in from the landing page', async ({ page }) => {
@@ -77,7 +75,8 @@ test('navigates up from every admin screen, and back in from the landing page', 
   await page.locator('.appliance-card', { hasText: 'E2E Test Brigade' }).click()
   await expect(page).toHaveURL('/e2etst/admin')
   await expect(page.locator('.header-up')).toHaveAttribute('href', '/admin/brigades')
-  await page.locator('.check-entry').click()
+  await page.locator('.appliance-row', { hasText: 'E2E 1' }).locator('.row-checks').click()
+  await page.getByRole('button', { name: 'Switch' }).click()
   await expect(page).toHaveURL('/e2etst')
   await expect(page.locator('.header-up')).toHaveAttribute('href', '/admin/brigades')
   await page.locator('.header-up', { hasText: '‹ Brigades' }).click()

@@ -203,21 +203,18 @@ async function remove(): Promise<void> {
           {{ formProblem }}
         </p>
 
-        <button
-          type="submit"
-          class="copy-prev-btn"
-          :disabled="saving"
-        >
-          {{ editingEmail === null ? 'Add' : 'Save' }}
-        </button>
-
-        <div
-          v-if="editingEmail !== null"
-          class="section-bottom-nav"
-        >
+        <div class="form-actions">
           <button
+            type="submit"
+            class="action-btn positive"
+            :disabled="saving"
+          >
+            {{ editingEmail === null ? 'Add' : 'Save' }}
+          </button>
+          <button
+            v-if="editingEmail !== null"
             type="button"
-            class="nav-btn section-back-btn"
+            class="action-btn danger"
             @click="remove"
           >
             Remove

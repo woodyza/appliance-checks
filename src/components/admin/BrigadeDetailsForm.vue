@@ -107,7 +107,7 @@ function submit(): void {
 
     <button
       type="submit"
-      class="copy-prev-btn save-brigade"
+      class="action-btn positive save-brigade"
       :disabled="props.saving"
     >
       {{ props.submitLabel }}

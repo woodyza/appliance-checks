@@ -45,7 +45,7 @@ test('the superadmin creates, edits and deactivates a brigade', async ({ page })
   await expect(page.locator('.appliance-card', { hasText: `${name} Renamed (inactive)` })).toBeVisible()
 })
 
-test("a Brigade Admin edits their brigade's settings but can't deactivate it", async ({ page }) => {
+test("a Brigade Admin edits their brigade's settings, can't deactivate it, and opens an appliance's Checks", async ({ page }) => {
   await signIn(page, BRIGADE_ADMIN_EMAIL)
   await expect(page).toHaveURL('/e2etst/admin')
 
@@ -59,6 +59,6 @@ test("a Brigade Admin edits their brigade's settings but can't deactivate it", a
   await page.reload()
   await expect(page.locator('.report-email')).toHaveValue('e2e-team@example.com')
 
-  await page.locator('.check-entry').click()
-  await expect(page).toHaveURL('/e2etst')
+  await page.locator('.appliance-row', { hasText: 'E2E 1' }).locator('.row-checks').click()
+  await expect(page).toHaveURL(/^http:\/\/localhost:5173\/e2etst\/e2e1/)
 })
