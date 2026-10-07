@@ -124,7 +124,10 @@ async function remove(): Promise<void> {
     :error="frameError"
   >
     <div class="screen active screen-picker">
-      <form @submit.prevent="save">
+      <form
+        class="admin-form"
+        @submit.prevent="save"
+      >
         <div class="picker-heading">
           Email
         </div>
@@ -206,7 +209,7 @@ async function remove(): Promise<void> {
         <div class="form-actions">
           <button
             type="submit"
-            class="action-btn positive"
+            class="small-btn positive"
             :disabled="saving"
           >
             {{ editingEmail === null ? 'Add' : 'Save' }}
@@ -214,7 +217,7 @@ async function remove(): Promise<void> {
           <button
             v-if="editingEmail !== null"
             type="button"
-            class="action-btn danger"
+            class="small-btn danger"
             @click="remove"
           >
             Remove

@@ -291,7 +291,7 @@ async function download(): Promise<void> {
                 <router-link
                   v-if="canRunChecks(appliance)"
                   :to="`/${slug}/${appliance.id}`"
-                  class="small-btn new-entry positive row-checks"
+                  class="small-btn fit-btn positive row-checks"
                 >
                   Checks
                 </router-link>
@@ -305,7 +305,7 @@ async function download(): Promise<void> {
                 </button>
                 <router-link
                   :to="`/${slug}/admin/${appliance.id}`"
-                  class="small-btn new-entry row-edit"
+                  class="small-btn fit-btn row-edit"
                 >
                   Edit
                 </router-link>
@@ -364,7 +364,7 @@ async function download(): Promise<void> {
           </div>
           <button
             v-if="!adding"
-            class="small-btn positive add-appliance"
+            class="small-btn fit-btn positive add-appliance"
             @click="startAdding"
           >
             + Add appliance
@@ -415,7 +415,7 @@ async function download(): Promise<void> {
           </p>
 
           <button
-            class="action-btn positive download-btn"
+            class="small-btn fit-btn positive download-btn"
             :disabled="!canDownload"
             @click="download"
           >

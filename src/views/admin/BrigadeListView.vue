@@ -27,7 +27,7 @@ const isVso = computed(() => gate.profile.value?.kind === 'admin')
       <router-link
         v-if="isSuperadmin"
         to="/admin/brigades/new"
-        class="small-btn new-entry positive new-brigade"
+        class="small-btn fit-btn positive new-brigade"
       >
         + New brigade
       </router-link>

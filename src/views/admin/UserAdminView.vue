@@ -37,7 +37,7 @@ function brigadeNames(ids: string[]): string {
     <div class="screen active screen-picker">
       <router-link
         to="/admin/users/new"
-        class="small-btn new-entry positive new-user"
+        class="small-btn fit-btn positive new-user"
       >
         + New user
       </router-link>

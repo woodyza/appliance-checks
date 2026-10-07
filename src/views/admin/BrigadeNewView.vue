@@ -43,6 +43,7 @@ async function save(brigade: NormalisedBrigade): Promise<void> {
   >
     <div class="screen active screen-picker">
       <BrigadeDetailsForm
+        class="admin-form"
         :initial="initial"
         active="hidden"
         show-settings

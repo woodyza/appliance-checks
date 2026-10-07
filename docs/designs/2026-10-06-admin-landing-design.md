@@ -73,9 +73,9 @@ Fields: name (1–60 chars), Check Day (Mon–Sun), active, Report Email (option
 - **Per-row "Checks" and "Edit" replaced the page's "Check entry ›" button** after a look at the built page. Each appliance row now has both actions, and the row itself is no longer a link. Settled with mockups.
 - **Positive actions are green app-wide**, using the app's existing Y colour, for consistency:
   - The editor's filled primary buttons (Publish, Copy, Import, the add-appliance Save) are green.
-  - Full-width form buttons (Save, Create, Add, Download, the sign-in buttons) share one style, with green text.
-  - "+ New …", "+ Add appliance" and a row's "Checks" have a green outline.
-  - Remove on the user screen is the same full-width style with a red outline.
+  - Every other positive button shares one style: sized to its label, with a neutral border and green text. That covers Save, Create, Add, Download, the sign-in buttons, "+ New …", "+ Add appliance" and a row's "Checks".
+  - Remove on the user screen is the same size with a red outline, at the opposite end of the row from Save.
+  - The user and new-brigade forms are capped at a readable width on desktop.
   - Amber stays for highlights, navigation and status.
 - **Review follow-up not applied:** someone who opens a brigade's `/:slug/admin` they can't manage (eg a Brigade Admin on another brigade's link) gets "Not authorised" with no header link out. Before this change it had "‹ Appliances". It's edge-case only, and the browser's back button still works.
 

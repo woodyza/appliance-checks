@@ -777,57 +777,28 @@ header {
   font-weight: 700;
 }
 .small-btn.positive {
-  border-color: var(--yes);
   color: var(--yes);
   font-weight: 600;
 }
-
-/* Full-width form actions: positive in green, destructive in red */
-.form-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 8px;
-}
-.action-btn {
-  width: 100%;
-  min-height: 2.75rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.6rem;
-  background: var(--surface);
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius);
-  color: var(--text);
-  font-family: var(--font);
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.action-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.action-btn.positive {
-  color: var(--yes);
-}
-.action-btn.positive:active:not(:disabled) {
-  border-color: var(--yes);
-}
-.action-btn.danger {
-  background: transparent;
+.small-btn.danger {
   border-color: var(--no-dim);
   color: var(--no);
+  font-weight: 600;
 }
-.action-btn.danger:active {
+.small-btn.danger:hover:not(:disabled) {
   border-color: var(--no);
 }
-.add-appliance {
-  align-self: flex-start;
+
+/* A form's submit on the left and, when there is one, its destructive action on the right */
+.form-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
 }
-.new-entry {
+/* Sized to its label rather than stretched across a column; works for links too */
+.fit-btn {
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
@@ -858,6 +829,11 @@ header {
   margin: 0 0 4px;
   font-size: 1rem;
   font-weight: 700;
+}
+/* A standalone form page, kept to a readable width on desktop */
+.admin-form {
+  width: 100%;
+  max-width: 36rem;
 }
 .brigade-details {
   display: flex;
