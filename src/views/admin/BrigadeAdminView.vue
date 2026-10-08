@@ -43,6 +43,7 @@ const months = recentMonths(today(), 12)
 const selectedMonth = ref(months[1] ?? months[0])
 
 const downloading = ref(false)
+const preparingQr = ref(false)
 const toast = ref<Toast | null>(null)
 
 const brigadeSummary = computed(() => gate.data.value)
@@ -240,6 +241,21 @@ async function saveNew(): Promise<void> {
   }
 }
 
+async function downloadQr(): Promise<void> {
+  const summary = brigadeSummary.value
+  if (!summary) return
+  preparingQr.value = true
+  try {
+    const { downloadQrSheet } = await import('../../report/qrPdf')
+    await downloadQrSheet(summary.brigade.name, `${window.location.origin}/${slug}`)
+  } catch (err) {
+    console.error(err)
+    showToast("Couldn't make the QR code", true)
+  } finally {
+    preparingQr.value = false
+  }
+}
+
 async function download(): Promise<void> {
   const summary = brigadeSummary.value
   const appliance = selectedAppliance.value
@@ -302,6 +318,21 @@ async function download(): Promise<void> {
             :saving="savingDetails"
             @save="saveDetails"
           />
+          <div class="qr-block">
+            <h3 class="block-title">
+              QR code
+            </h3>
+            <p class="block-note">
+              Print this and put it up where Checks start, e.g. the engine bay.
+            </p>
+            <button
+              class="small-btn fit-btn positive download-qr"
+              :disabled="preparingQr || !brigadeSummary"
+              @click="downloadQr"
+            >
+              {{ preparingQr ? 'Preparing…' : 'Download PDF' }}
+            </button>
+          </div>
         </section>
 
         <section class="admin-panel appliances-panel">

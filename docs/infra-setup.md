@@ -172,5 +172,5 @@ This keeps the data, the `*.web.app` URLs and therefore every printed QR code.
 **Reprovisioning** (new projects under the new account) means:
 
 - new project ids: edit the aliases in `.firebaserc` by hand (`make provision` won't repoint an existing alias), then run section 3
-- a new Hosting domain, so every appliance's QR code gets reprinted, unless a custom domain sits in front of Hosting
+- a new Hosting domain, so every brigade's QR code gets reprinted, unless a custom domain sits in front of Hosting
 - copying Firestore data across (`gcloud firestore export` / `import` via a Cloud Storage bucket, which needs billing enabled). Brigade Links survive the copy, since the slug is the document id (ADR 0004)

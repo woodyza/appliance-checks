@@ -106,7 +106,7 @@ function ensureHosting(projectId: string): void {
   const siteId = defaultSite.name.split('/').pop()
   console.log(`  already exists: ${defaultSite.defaultUrl ?? siteId}`)
   if (siteId !== projectId) {
-    console.log(`  warning: site id "${siteId}" differs from the project id, so CLI-printed QR URLs will be wrong`)
+    console.log(`  warning: site id "${siteId}" differs from the project id, so CLI-printed Brigade Links will be wrong`)
   }
 }
 

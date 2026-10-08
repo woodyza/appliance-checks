@@ -841,7 +841,8 @@ header {
   flex-direction: column;
   gap: 6px;
 }
-.report-block {
+.report-block,
+.qr-block {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1006,18 +1007,6 @@ select.cell-input {
   margin-top: 6px;
   accent-color: var(--accent);
 }
-.qr-field {
-  flex-direction: row;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.qr-link {
-  font-family: 'DM Mono', monospace;
-  font-size: 0.85rem;
-  color: var(--accent);
-  word-break: break-all;
-}
-
 .review-banner {
   position: sticky;
   top: 0;

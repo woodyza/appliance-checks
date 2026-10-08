@@ -15,7 +15,7 @@ async function main(): Promise<void> {
   if (!values.brigade) throw new Error('--brigade is required.')
   if (!values.id) throw new Error('--id is required.')
   if (!/^[A-Za-z0-9_-]+$/.test(values.id)) {
-    throw new Error('--id must contain only letters, digits, "-" and "_" (it becomes part of the QR URL).')
+    throw new Error('--id must contain only letters, digits, "-" and "_" (it becomes part of the appliance\'s URL).')
   }
   if (!values.callsign) throw new Error('--callsign is required.')
 
@@ -24,7 +24,7 @@ async function main(): Promise<void> {
   await addAppliance(db, values.brigade, { id: values.id, callsign: values.callsign })
 
   console.log(`Appliance added: ${values.callsign} (${values.id})`)
-  console.log(`QR URL: ${hostingBaseUrl(target)}/${values.brigade}/${values.id}`)
+  console.log(`Brigade Link: ${hostingBaseUrl(target)}/${values.brigade}`)
 }
 
 main().catch((error: unknown) => {

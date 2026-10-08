@@ -8,7 +8,7 @@ A brigade's routine checks that each appliance's equipment is present and servic
 A volunteer fire brigade that owns one or more appliances and runs Checks on them.
 
 **Brigade Link**:
-The unguessable short URL that opens the app for one brigade, usually reached via an appliance's QR code. Through it, the app looks dedicated to that brigade alone.
+The unguessable short URL that opens the app for one brigade, usually reached via the brigade's QR code, put up where Checks start (e.g. the engine bay). Through it, the app looks dedicated to that brigade alone.
 _Avoid_: Brigade URL, brigade key
 
 **Superadmin**:
