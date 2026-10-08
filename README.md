@@ -24,7 +24,7 @@ tests/
 firebase.json, firestore.rules, firestore.indexes.json
 ```
 
-Data model: see [the foundations design](./docs/designs/2026-09-25-foundations-design.md#data-model), and [the check entry design](./docs/designs/2026-09-26-check-entry-design.md#data-model) for Checks and their rules. Decisions worth keeping are recorded as ADRs in [`docs/adr/`](./docs/adr/).
+Domain language is in [`CONTEXT.md`](./CONTEXT.md). Decisions worth keeping are recorded as ADRs in [`docs/adr/`](./docs/adr/).
 
 ## Prerequisites
 
