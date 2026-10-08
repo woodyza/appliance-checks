@@ -121,7 +121,7 @@ The spreadsheet id is the long string in the sheet's URL (`/spreadsheets/d/<id>/
 
 #### Weekly VSO email
 
-Emails the brigades whose Check Day is that day, covering the previous Check: one email per address, with a row per appliance (Complete, n%, or not started; anything under 100% is highlighted). A brigade goes to its Report Email if it has one, otherwise to the VSOs assigned to it. Brigades can opt out. Per-brigade settings live in `brigades/{slug}/private/settings`, and nothing in the UI edits them yet (#22), so use the CLI:
+Emails the brigades whose Check Day is that day, covering the previous Check: one email per address, with a row per appliance (Complete, n%, or not started; anything under 100% is highlighted). A brigade goes to its Report Email if it has one, otherwise to the VSOs assigned to it. Brigades can opt out. Per-brigade settings live in `brigades/{slug}/private/settings`. VSOs and the superadmin edit them in the Reports panel on the brigade's admin page, or use the CLI:
 
 ```bash
 npm run cli:brigade-settings -- --project dev --brigade <slug> --report-email <addr>    # or --clear-report-email
@@ -141,7 +141,7 @@ The logs list each email sent, each brigade skipped (and why) and each failure. 
 
 #### Monthly Report email
 
-A brigade's Brigade Admins or VSOs turn this on in the details form on its admin page, with an address (`brigades/{slug}/private/monthlyReport`). Once the month's last Check is done for every appliance, or a week after it with whatever is there, the brigade gets one email with a PDF Monthly Report per appliance. It's sent once a month: `private/monthlyReportSent` records the month, and only the function can read or write it. A failed send leaves no record, so the next day's run retries it. Turning it on catches up the most recent month only.
+A brigade's Brigade Admins or VSOs turn this on in the Reports panel on its admin page, with an address (`brigades/{slug}/private/monthlyReport`). Once the month's last Check is done for every appliance, or a week after it with whatever is there, the brigade gets one email with a PDF Monthly Report per appliance. It's sent once a month: `private/monthlyReportSent` records the month, and only the function can read or write it. A failed send leaves no record, so the next day's run retries it. Turning it on catches up the most recent month only.
 
 It runs in the same job, so the run and log commands above cover it. Its log lines are `Sent Monthly Report email`, `Skipped Monthly Report brigade` and `Monthly Report email failed`.
 

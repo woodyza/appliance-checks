@@ -56,9 +56,12 @@ Accepted limitation: a Check Day change near the end of a month can put L on a d
 
 ## Admin UI
 
-- The brigade admin page's details form gets a "Monthly Report email" block, shown to Brigade Admins and VSOs alike: a checkbox, "Email the Monthly Reports when the month's Checks are done", and an address. Hidden on the new-brigade form, since no doc means off.
-- `BrigadeDraft` / `normaliseBrigade` gain `monthlyReportEnabled` and `monthlyReportEmail`. Ticked with a blank address → "Add an address to email the Monthly Reports". An invalid address → "Enter a valid Monthly Report email address.", ticked or not. The address is kept when unticked.
-- The page reads the doc on load, and `updateBrigade` writes it in the same batch as the brigade details.
+All reporting lives in the brigade admin page's Reports panel, so the Details panel is just the brigade (name, Check Day, "Brigade is active") and neither email's address sits next to unrelated fields.
+
+- The Reports panel has three blocks, each with a heading: "Download a Monthly Report" (unchanged), "Monthly Report email" and "Weekly VSO email" (tagged "VSOs only", and hidden from a Brigade Admin). Each email has a one-line description, a "Send it" checkbox and its own "To" address, so the two read as separate settings.
+- One "Save email settings" for both emails. It writes `private/monthlyReport`, plus `private/settings` for VSOs and the superadmin, in one batch.
+- The details and the email settings are validated separately (`normaliseBrigade`, `normaliseReportSettings`). Ticked with a blank address → "Add an address to email the Monthly Reports". An invalid address → "Enter a valid Monthly Report email address.", ticked or not. The address is kept when unticked.
+- The new-brigade form is just the details. A new brigade has no settings docs, so the weekly email is on and goes to its VSOs, and the Monthly Report email is off.
 - No CLI changes.
 
 ## Docs
@@ -81,3 +84,4 @@ Accepted limitation: a Check Day change near the end of a month can put L on a d
 - If the marker write fails after a successful send, the brigade is logged as both sent and failed, and the next run sends a duplicate (the accepted trade-off above).
 - The function now fails on a day when only the Monthly Report pass failed. If the weekly pass throws before it gets going, the Monthly Report pass waits for the next day's run.
 - Review found the Check Day change limitation also covers sending early, not just waiting. Recorded above rather than handled.
+- After seeing it built, all report settings moved out of the Details panel into the Reports panel (with one Save for both emails), and off the new-brigade form, so a VSO doesn't mistake one email's address for the other's, or "Active" for an email setting.

@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import BrigadeDetailsForm from '../../components/admin/BrigadeDetailsForm.vue'
+import ReportSettingsForm from '../../components/admin/ReportSettingsForm.vue'
 import AdminFrame from '../../components/AdminFrame.vue'
 import { ApplianceIdTaken, addAppliance, getDraft, listAllAppliances } from '../../data/checkSheet'
 import {
@@ -10,11 +11,12 @@ import {
   getMonthlyReportSettings,
   listChecksInMonth,
   updateBrigade,
+  updateReportSettings,
 } from '../../data/admin'
 import { type ApplianceSummary, getVersion } from '../../data/checks'
 import { canManageBrigadeSettings, hasBrigadeList } from '../../domain/adminProfile'
 import { applianceIdProblem, callsignProblem, suggestApplianceId } from '../../domain/appliance'
-import type { BrigadeDraft, NormalisedBrigade } from '../../domain/brigade'
+import type { BrigadeDraft, NormalisedBrigade, NormalisedReportSettings, ReportSettingsDraft } from '../../domain/brigade'
 import { buildMonthlyReport } from '../../domain/report'
 import { recentMonths, today } from '../../domain/schedule'
 import type { BrigadeSettings, CheckSheetVersion } from '../../domain/types'
@@ -56,8 +58,12 @@ const up = computed(() =>
 const details = ref<BrigadeDraft | null>(null)
 // Bumped on each save so the form re-reads the normalised values.
 const detailsVersion = ref(0)
-const detailsError = ref<string | null>(null)
 const savingDetails = ref(false)
+const reportSettings = ref<ReportSettingsDraft | null>(null)
+// Bumped on each save so the form re-reads the normalised values.
+const reportSettingsVersion = ref(0)
+const reportSettingsError = ref<string | null>(null)
+const savingReportSettings = ref(false)
 const activeMode = computed(() => (gate.profile.value?.kind === 'superadmin' ? 'editable' : 'readonly'))
 const showSettings = computed(() => gate.profile.value !== null && canManageBrigadeSettings(gate.profile.value))
 const invalidLink = computed(
@@ -105,17 +111,18 @@ async function loadDrafts(list: ApplianceSummary[]): Promise<void> {
   }
 }
 
-async function loadDetails(summary: BrigadeSummary): Promise<void> {
+function loadDetails(summary: BrigadeSummary): void {
+  details.value = { name: summary.brigade.name, checkDay: summary.brigade.checkDay, active: summary.brigade.active }
+}
+
+async function loadReportSettings(): Promise<void> {
   try {
-    // A Brigade Admin can't read the settings, and the form hides them anyway.
+    // A Brigade Admin can't read the weekly settings, and the form hides them anyway.
     const [settings, monthlyReport] = await Promise.all([
       showSettings.value ? getBrigadeSettings(slug) : Promise.resolve<BrigadeSettings>({}),
       getMonthlyReportSettings(slug),
     ])
-    details.value = {
-      name: summary.brigade.name,
-      checkDay: summary.brigade.checkDay,
-      active: summary.brigade.active,
+    reportSettings.value = {
       reportEmail: settings.reportEmail ?? '',
       weeklyEmail: wantsWeeklyEmail(settings),
       monthlyReportEnabled: monthlyReport.enabled === true,
@@ -123,7 +130,7 @@ async function loadDetails(summary: BrigadeSummary): Promise<void> {
     }
   } catch (err) {
     console.error(err)
-    detailsError.value = "Couldn't load the brigade's details."
+    reportSettingsError.value = "Couldn't load the email settings."
   }
 }
 
@@ -133,19 +140,10 @@ async function saveDetails(fields: NormalisedBrigade): Promise<void> {
   savingDetails.value = true
   try {
     const canChangeActive = activeMode.value === 'editable'
-    await updateBrigade(slug, fields, {
-      active: canChangeActive,
-      settings: showSettings.value,
-      monthlyReport: true,
-    })
+    await updateBrigade(slug, fields, canChangeActive)
     const active = canChangeActive ? fields.active : summary.brigade.active
     gate.data.value = { slug, brigade: { ...summary.brigade, name: fields.name, checkDay: fields.checkDay, active } }
-    details.value = {
-      ...fields,
-      active,
-      reportEmail: fields.reportEmail ?? '',
-      monthlyReportEmail: fields.monthlyReportEmail ?? '',
-    }
+    details.value = { ...fields, active }
     detailsVersion.value++
     showToast('Saved', false)
   } catch (err) {
@@ -156,11 +154,31 @@ async function saveDetails(fields: NormalisedBrigade): Promise<void> {
   }
 }
 
+async function saveReportSettings(settings: NormalisedReportSettings): Promise<void> {
+  savingReportSettings.value = true
+  try {
+    await updateReportSettings(slug, settings, showSettings.value)
+    reportSettings.value = {
+      ...settings,
+      reportEmail: settings.reportEmail ?? '',
+      monthlyReportEmail: settings.monthlyReportEmail ?? '',
+    }
+    reportSettingsVersion.value++
+    showToast('Saved', false)
+  } catch (err) {
+    console.error(err)
+    showToast(isPermissionDenied(err) ? 'Not authorised.' : "Couldn't save", true)
+  } finally {
+    savingReportSettings.value = false
+  }
+}
+
 watch(
   () => gate.loading.value,
   async (loading) => {
     if (loading || !brigadeSummary.value) return
-    void loadDetails(brigadeSummary.value)
+    loadDetails(brigadeSummary.value)
+    void loadReportSettings()
     try {
       appliances.value = await listAllAppliances(slug)
       selectedApplianceId.value = appliances.value[0]?.id ?? null
@@ -280,18 +298,10 @@ async function download(): Promise<void> {
             :key="detailsVersion"
             :initial="details"
             :active="activeMode"
-            :show-settings="showSettings"
-            show-monthly-report
             submit-label="Save"
             :saving="savingDetails"
             @save="saveDetails"
           />
-          <p
-            v-else-if="detailsError"
-            class="error-msg"
-          >
-            {{ detailsError }}
-          </p>
         </section>
 
         <section class="admin-panel appliances-panel">
@@ -396,6 +406,9 @@ async function download(): Promise<void> {
           <h2 class="panel-title">
             Reports
           </h2>
+          <h3 class="block-title">
+            Download a Monthly Report
+          </h3>
           <div class="picker-heading">
             Appliance
           </div>
@@ -442,6 +455,21 @@ async function download(): Promise<void> {
           >
             {{ downloading ? 'Preparing…' : 'Download' }}
           </button>
+
+          <ReportSettingsForm
+            v-if="reportSettings"
+            :key="reportSettingsVersion"
+            :initial="reportSettings"
+            :show-weekly="showSettings"
+            :saving="savingReportSettings"
+            @save="saveReportSettings"
+          />
+          <p
+            v-else-if="reportSettingsError"
+            class="error-msg"
+          >
+            {{ reportSettingsError }}
+          </p>
         </section>
       </div>
     </main>

@@ -19,21 +19,20 @@ test('the superadmin creates, edits and deactivates a brigade', async ({ page })
   await page.getByRole('button', { name: 'Create' }).click()
   await expect(page.locator('.error-msg')).toHaveText('Pick a Check Day.')
 
+  await expect(page.locator('.report-email')).toHaveCount(0)
   await page.locator('.check-day-select').selectOption({ label: 'Wednesday' })
-  await page.locator('.report-email').fill('  VSO-Team@Example.com ')
-  await page.locator('.weekly-email').uncheck()
   await page.getByRole('button', { name: 'Create' }).click()
 
   await expect(page).toHaveURL(/^http:\/\/localhost:5173\/[2-9a-hjkmnp-z]{6}\/admin$/)
   await expect(page.locator('.header-callsign')).toHaveText(name)
   await expect(page.locator('.check-day-select')).toHaveValue('3')
-  await expect(page.locator('.report-email')).toHaveValue('vso-team@example.com')
-  await expect(page.locator('.weekly-email')).not.toBeChecked()
+  await expect(page.locator('.report-email')).toHaveValue('')
+  await expect(page.locator('.weekly-email')).toBeChecked()
   await expect(page.locator('.brigade-active')).toBeChecked()
 
   await page.locator('.brigade-name').fill(`${name} Renamed`)
   await page.locator('.brigade-active').uncheck()
-  await page.getByRole('button', { name: 'Save' }).click()
+  await page.locator('.save-brigade').click()
   await expect(page.locator('#toast')).toContainText('Saved')
 
   await page.reload()
@@ -45,7 +44,7 @@ test('the superadmin creates, edits and deactivates a brigade', async ({ page })
   await expect(page.locator('.appliance-card', { hasText: `${name} Renamed (inactive)` })).toBeVisible()
 })
 
-test("a Brigade Admin saves their brigade's details without its report settings or Active", async ({ page }) => {
+test("a Brigade Admin saves their brigade's details and email settings without the weekly email or Active", async ({ page }) => {
   await signIn(page, BRIGADE_ADMIN_EMAIL)
   await expect(page).toHaveURL('/e2etst/admin')
 
@@ -54,8 +53,13 @@ test("a Brigade Admin saves their brigade's details without its report settings 
   await expect(page.locator('.report-email')).toHaveCount(0)
   await expect(page.locator('.weekly-email')).toHaveCount(0)
 
-  // Would be refused if the save also wrote the settings, which a Brigade Admin can't.
-  await page.getByRole('button', { name: 'Save' }).click()
+  await page.locator('.save-brigade').click()
+  await expect(page.locator('#toast')).toContainText('Saved')
+
+  // Reloaded so the first save's toast can't stand in for the second's.
+  await page.reload()
+  // Would be refused if the save also wrote the weekly settings, which a Brigade Admin can't.
+  await page.locator('.save-reports').click()
   await expect(page.locator('#toast')).toContainText('Saved')
 
   await page.locator('.appliance-row', { hasText: 'E2E 1' }).locator('.row-checks').click()
@@ -69,7 +73,7 @@ test("a VSO sets their brigade's Report Email", async ({ page }) => {
 
   await page.locator('.report-email').fill('e2e-team@example.com')
   await page.locator('.weekly-email').uncheck()
-  await page.getByRole('button', { name: 'Save' }).click()
+  await page.locator('.save-reports').click()
   await expect(page.locator('#toast')).toContainText('Saved')
 
   await page.reload()
@@ -83,11 +87,11 @@ test("a Brigade Admin sets their brigade's Monthly Report email", async ({ page 
 
   await page.locator('.monthly-report-enabled').check()
   await page.locator('.monthly-report-email').fill('')
-  await page.getByRole('button', { name: 'Save' }).click()
+  await page.locator('.save-reports').click()
   await expect(page.locator('.error-msg')).toHaveText('Add an address to email the Monthly Reports.')
 
   await page.locator('.monthly-report-email').fill('  Reports@Example.com ')
-  await page.getByRole('button', { name: 'Save' }).click()
+  await page.locator('.save-reports').click()
   await expect(page.locator('#toast')).toContainText('Saved')
 
   await page.reload()

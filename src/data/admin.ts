@@ -15,7 +15,7 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { batches } from '../domain/adminProfile'
-import type { NormalisedBrigade } from '../domain/brigade'
+import type { NormalisedBrigade, NormalisedReportSettings } from '../domain/brigade'
 import { firstOfNextMonth } from '../domain/schedule'
 import { generateSlug } from '../domain/slug'
 import type { AdminRole, AdminUser, Brigade, BrigadeSettings, Check, MonthlyReportSettings } from '../domain/types'
@@ -136,8 +136,6 @@ const SLUG_ATTEMPTS = 5
 /** Creates an active brigade under a fresh Brigade Link slug, and returns the slug. */
 export async function createBrigade(fields: NormalisedBrigade): Promise<string> {
   const brigade: Brigade = { brigadeId: crypto.randomUUID(), name: fields.name, checkDay: fields.checkDay, active: true }
-  const settings: BrigadeSettings = { weeklyEmail: fields.weeklyEmail }
-  if (fields.reportEmail !== null) settings.reportEmail = fields.reportEmail
 
   for (let attempt = 0; attempt < SLUG_ATTEMPTS; attempt++) {
     const slug = generateSlug()
@@ -146,7 +144,6 @@ export async function createBrigade(fields: NormalisedBrigade): Promise<string> 
       await runTransaction(db, async (tx) => {
         if ((await tx.get(ref)).exists()) throw new SlugTaken()
         tx.set(ref, brigade)
-        tx.set(settingsRef(slug), settings)
       })
       return slug
     } catch (err) {
@@ -156,34 +153,32 @@ export async function createBrigade(fields: NormalisedBrigade): Promise<string> 
   throw new Error(`Could not generate a unique brigade slug after ${String(SLUG_ATTEMPTS)} attempts.`)
 }
 
-export interface BrigadeUpdateScope {
-  /** The rules let only the superadmin change `active`. */
-  active: boolean
-  /** The rules keep the settings from a Brigade Admin. */
-  settings: boolean
-  /** Any admin of the brigade can change its Monthly Report email. */
-  monthlyReport: boolean
-}
-
-export async function updateBrigade(slug: string, fields: NormalisedBrigade, scope: BrigadeUpdateScope): Promise<void> {
-  const batch = writeBatch(db)
-  batch.update(doc(db, 'brigades', slug), {
+/** The rules let only the superadmin change `active`. */
+export async function updateBrigade(slug: string, fields: NormalisedBrigade, canChangeActive: boolean): Promise<void> {
+  await updateDoc(doc(db, 'brigades', slug), {
     name: fields.name,
     checkDay: fields.checkDay,
-    ...(scope.active ? { active: fields.active } : {}),
+    ...(canChangeActive ? { active: fields.active } : {}),
   })
-  if (scope.settings) {
+}
+
+/** Any admin of the brigade can change its Monthly Report email; the rules keep the weekly settings to its VSOs. */
+export async function updateReportSettings(
+  slug: string,
+  settings: NormalisedReportSettings,
+  includeWeekly: boolean,
+): Promise<void> {
+  const batch = writeBatch(db)
+  batch.set(monthlyReportRef(slug), {
+    enabled: settings.monthlyReportEnabled,
+    email: settings.monthlyReportEmail ?? '',
+  })
+  if (includeWeekly) {
     batch.set(
       settingsRef(slug),
-      { reportEmail: fields.reportEmail ?? deleteField(), weeklyEmail: fields.weeklyEmail },
+      { reportEmail: settings.reportEmail ?? deleteField(), weeklyEmail: settings.weeklyEmail },
       { merge: true },
     )
-  }
-  if (scope.monthlyReport) {
-    batch.set(monthlyReportRef(slug), {
-      enabled: fields.monthlyReportEnabled,
-      email: fields.monthlyReportEmail ?? '',
-    })
   }
   await batch.commit()
 }

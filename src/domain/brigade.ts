@@ -17,20 +17,12 @@ export interface BrigadeDraft {
   name: string
   checkDay: number | null
   active: boolean
-  reportEmail: string
-  weeklyEmail: boolean
-  monthlyReportEnabled: boolean
-  monthlyReportEmail: string
 }
 
 export interface NormalisedBrigade {
   name: string
   checkDay: number
   active: boolean
-  reportEmail: string | null
-  weeklyEmail: boolean
-  monthlyReportEnabled: boolean
-  monthlyReportEmail: string | null
 }
 
 export type NormaliseBrigadeResult = { ok: true; brigade: NormalisedBrigade } | { ok: false; problem: string }
@@ -41,8 +33,34 @@ export function normaliseBrigade(draft: BrigadeDraft): NormaliseBrigadeResult {
   if (name.length > MAX_NAME_LENGTH) return { ok: false, problem: `Keep the name to ${MAX_NAME_LENGTH} characters.` }
   if (draft.checkDay === null) return { ok: false, problem: 'Pick a Check Day.' }
 
+  return { ok: true, brigade: { name, checkDay: draft.checkDay, active: draft.active } }
+}
+
+export interface ReportSettingsDraft {
+  reportEmail: string
+  weeklyEmail: boolean
+  monthlyReportEnabled: boolean
+  monthlyReportEmail: string
+}
+
+export interface NormalisedReportSettings {
+  reportEmail: string | null
+  weeklyEmail: boolean
+  monthlyReportEnabled: boolean
+  monthlyReportEmail: string | null
+}
+
+export type NormaliseReportSettingsResult =
+  | { ok: true; settings: NormalisedReportSettings }
+  | { ok: false; problem: string }
+
+function validEmail(email: string): boolean {
+  return isValidEmail(email) && email.length <= MAX_EMAIL_LENGTH
+}
+
+export function normaliseReportSettings(draft: ReportSettingsDraft): NormaliseReportSettingsResult {
   const reportEmail = draft.reportEmail.trim().toLowerCase() || null
-  if (reportEmail !== null && (!isValidEmail(reportEmail) || reportEmail.length > MAX_EMAIL_LENGTH)) {
+  if (reportEmail !== null && !validEmail(reportEmail)) {
     return { ok: false, problem: 'Enter a valid Report Email, or leave it blank.' }
   }
 
@@ -50,16 +68,13 @@ export function normaliseBrigade(draft: BrigadeDraft): NormaliseBrigadeResult {
   if (draft.monthlyReportEnabled && monthlyReportEmail === null) {
     return { ok: false, problem: 'Add an address to email the Monthly Reports.' }
   }
-  if (monthlyReportEmail !== null && (!isValidEmail(monthlyReportEmail) || monthlyReportEmail.length > MAX_EMAIL_LENGTH)) {
+  if (monthlyReportEmail !== null && !validEmail(monthlyReportEmail)) {
     return { ok: false, problem: 'Enter a valid Monthly Report email address.' }
   }
 
   return {
     ok: true,
-    brigade: {
-      name,
-      checkDay: draft.checkDay,
-      active: draft.active,
+    settings: {
       reportEmail,
       weeklyEmail: draft.weeklyEmail,
       monthlyReportEnabled: draft.monthlyReportEnabled,
