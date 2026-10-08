@@ -10,6 +10,7 @@ import {
   nextCheckDate,
   recentMonths,
   today,
+  upcomingCheckDate,
 } from '../../src/domain/schedule'
 
 describe('today', () => {
@@ -43,6 +44,20 @@ describe('nextCheckDate', () => {
 
   it('returns the next occurrence of a changed Check Day', () => {
     expect(nextCheckDate('2026-09-21', 4)).toBe('2026-09-24')
+  })
+})
+
+describe('upcomingCheckDate', () => {
+  it('returns the next Check Day when it is 2 days away', () => {
+    expect(upcomingCheckDate('2026-10-10', 1)).toBe('2026-10-12')
+  })
+
+  it('returns null when the next Check Day is 3 days away', () => {
+    expect(upcomingCheckDate('2026-10-09', 1)).toBeNull()
+  })
+
+  it('returns null on a Check Day', () => {
+    expect(upcomingCheckDate('2026-10-12', 1)).toBeNull()
   })
 })
 

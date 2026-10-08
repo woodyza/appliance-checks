@@ -64,6 +64,12 @@ The upper bound on `scheduledDate` goes from `request.time + 1d` to `request.tim
 - **Unit, selector:** on an early day it includes the upcoming Check; Sat 31 Oct with a Monday Check Day still lists 26 Oct.
 - **Rules:** a Check dated NZ today + 2 is accepted, and NZ today + 4 is rejected.
 
+## Changes during implementation
+
+- **"Complete" for the default rule** means Complete against the version the Check renders (its stamped version if Frozen, otherwise the current one), matching what the Check screen and weekly email show. For the previous Check this is the same as before, since it's always Frozen-by-window by then.
+- **Completeness is worked out when the Check screen loads**, as it was for the previous Check. Finishing last week's Check doesn't move you onto the upcoming one mid-session; reopening the appliance does.
+- **The selector's new start month also fixes a Check Day change edge case:** an existing Check under the old Check Day, still in its window and in a later month than the current Check, used to hide the current Check from the selector. Both now show.
+
 ## Out of scope
 
 A per-brigade lead time; a nudge on the upcoming Check that last week's isn't Complete.

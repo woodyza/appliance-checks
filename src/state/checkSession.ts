@@ -13,6 +13,7 @@ import {
 import {
   defaultCheckDate,
   isComplete,
+  isCompleteAsRendered,
   isFrozen,
   isStarted,
   mergeResponses,
@@ -23,7 +24,7 @@ import {
   type SectionProgress,
   selectorDates,
 } from '../domain/check'
-import { currentCheckDate, firstOfPreviousMonth, today } from '../domain/schedule'
+import { currentCheckDate, firstOfPreviousMonth, today, upcomingCheckDate } from '../domain/schedule'
 import type { Appliance, Brigade, Check, Section } from '../domain/types'
 
 const SAVE_FAILURE_MESSAGE = "Couldn't save. If this keeps happening, this device can't save right now."
@@ -72,7 +73,9 @@ export function useCheckSession(slug: string, applianceId: string, selected: Ref
   const brigade = ref<Brigade | null>(null)
   const appliance = ref<Appliance | null>(null)
   const recentChecks = ref<Check[]>([])
-  const previousComplete = ref(false)
+  // A snapshot at load of which Checks from the latest previous one onwards are Complete, for
+  // picking the default Check.
+  const completeDates = ref(new Set<string>())
   const currentVersionSections = ref<Section[]>([])
   const stampedSections = ref<Section[]>([])
   const stampedForVersion = ref<number | null>(null)
@@ -99,6 +102,10 @@ export function useCheckSession(slug: string, applianceId: string, selected: Ref
     return brigade.value ? currentCheckDate(todayRef.value, brigade.value.checkDay) : todayRef.value
   })
 
+  const upcomingDate = computed<string | null>(() => {
+    return brigade.value ? upcomingCheckDate(todayRef.value, brigade.value.checkDay) : null
+  })
+
   function latestPrevious(checks: Check[], before: string): Check | null {
     return (
       checks
@@ -109,13 +116,12 @@ export function useCheckSession(slug: string, applianceId: string, selected: Ref
 
   const defaultDate = computed<string>(() => {
     if (!brigade.value) return currentDate.value
-    const previous = latestPrevious(recentChecks.value, currentDate.value)
     const existing = recentChecks.value.map((check) => ({
       scheduledDate: check.scheduledDate,
       started: isStarted(check),
-      complete: previous !== null && check.scheduledDate === previous.scheduledDate ? previousComplete.value : false,
+      complete: completeDates.value.has(check.scheduledDate),
     }))
-    return defaultCheckDate(existing, currentDate.value, todayRef.value, brigade.value.checkDay)
+    return defaultCheckDate(existing, currentDate.value, todayRef.value, brigade.value.checkDay, upcomingDate.value)
   })
 
   const selectorDatesList = computed<string[]>(() => {
@@ -126,6 +132,7 @@ export function useCheckSession(slug: string, applianceId: string, selected: Ref
       currentDate.value,
       todayRef.value,
       brigade.value.checkDay,
+      upcomingDate.value,
     )
   })
 
@@ -293,16 +300,20 @@ export function useCheckSession(slug: string, applianceId: string, selected: Ref
       const checks = await listRecentChecks(slug, applianceId, since)
       recentChecks.value = checks
 
-      const cur = currentCheckDate(todayRef.value, brigadeDoc.checkDay)
-      const previous = latestPrevious(checks, cur)
-      if (previous) {
-        const stamped = await getVersion(slug, applianceId, previous.checkSheetVersion)
-        previousComplete.value = isComplete(stamped.sections, previous.responses, previous.monthly)
-      } else {
-        previousComplete.value = false
-      }
+      const current = await getVersion(slug, applianceId, applianceDoc.currentCheckSheetVersion)
 
-      currentVersionSections.value = (await getVersion(slug, applianceId, applianceDoc.currentCheckSheetVersion)).sections
+      const cur = currentCheckDate(todayRef.value, brigadeDoc.checkDay)
+      const from = latestPrevious(checks, cur)?.scheduledDate ?? cur
+      const complete = new Set<string>()
+      for (const check of checks.filter((c) => c.scheduledDate >= from)) {
+        const stamped = await getVersion(slug, applianceId, check.checkSheetVersion)
+        if (isCompleteAsRendered(check, stamped, current, todayRef.value, brigadeDoc.checkDay)) {
+          complete.add(check.scheduledDate)
+        }
+      }
+      completeDates.value = complete
+
+      currentVersionSections.value = current.sections
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Could not load this Check.'
     } finally {

@@ -1,5 +1,8 @@
 export const CHECK_TIME_ZONE = 'Pacific/Auckland'
 
+/** How many days before its scheduled date a Check can be started. */
+export const EARLY_DAYS = 2
+
 export function today(now: Date = new Date()): string {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: CHECK_TIME_ZONE,
@@ -56,6 +59,12 @@ export function currentCheckDate(today: string, checkDay: number): string {
 export function nextCheckDate(date: string, checkDay: number): string {
   const diff = (checkDay - weekday(date) + 7) % 7
   return addDays(date, diff === 0 ? 7 : diff)
+}
+
+/** The next Check if it's already open early, otherwise null. */
+export function upcomingCheckDate(today: string, checkDay: number): string | null {
+  const next = nextCheckDate(today, checkDay)
+  return next <= addDays(today, EARLY_DAYS) ? next : null
 }
 
 export function checkDatesBetween(from: string, to: string, checkDay: number): string[] {

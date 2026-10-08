@@ -61,6 +61,17 @@ export function isFrozen(check: Check, stamped: CheckSheetVersion, today: string
   )
 }
 
+export function isCompleteAsRendered(
+  check: Check,
+  stamped: CheckSheetVersion,
+  current: CheckSheetVersion,
+  today: string,
+  checkDay: number,
+): boolean {
+  const sections = isFrozen(check, stamped, today, checkDay) ? stamped.sections : current.sections
+  return isComplete(sections, check.responses, check.monthly)
+}
+
 export function renderVersion(check: Check | null, frozen: boolean, currentVersion: number): number {
   return check && frozen ? check.checkSheetVersion : currentVersion
 }
@@ -75,7 +86,23 @@ export interface ExistingCheckSummary {
   complete: boolean
 }
 
+/**
+ * On an early day (`upcoming` set), the upcoming Check only becomes the default once the Check
+ * that would otherwise be the default is Complete, so an unfinished Check is hard to miss.
+ */
 export function defaultCheckDate(
+  existing: ExistingCheckSummary[],
+  currentDate: string,
+  today: string,
+  checkDay: number,
+  upcoming: string | null,
+): string {
+  const date = inWindowDefault(existing, currentDate, today, checkDay)
+  if (upcoming && existing.some((check) => check.scheduledDate === date && check.complete)) return upcoming
+  return date
+}
+
+function inWindowDefault(
   existing: ExistingCheckSummary[],
   currentDate: string,
   today: string,
@@ -110,10 +137,11 @@ export function selectorDates(
   currentDate: string,
   today: string,
   checkDay: number,
+  upcoming: string | null,
 ): string[] {
-  const from = firstOfMonth(defaultDate)
-  const computed = checkDatesBetween(from, currentDate, checkDay)
-  const existingInRange = existingDates.filter((date) => date >= from && date <= today)
+  const from = firstOfMonth(defaultDate < currentDate ? defaultDate : currentDate)
+  const computed = checkDatesBetween(from, upcoming ?? currentDate, checkDay)
+  const existingInRange = existingDates.filter((date) => date >= from && date <= (upcoming ?? today))
   return [...new Set([...computed, ...existingInRange])].sort()
 }
 

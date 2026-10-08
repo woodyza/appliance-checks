@@ -61,7 +61,7 @@ An Item that is due on every Check, or an Item that is only due on the last Chec
 The weekday a brigade runs its Checks, usually four or five times a month. A change applies only to Checks created afterwards.
 
 **Check**:
-One pass through every Item due on an appliance for a scheduled Check Day, identified by that scheduled date. It's due on that date, but is acceptable any time before the next Check is due, and still belongs to its scheduled date and month when it's done late. Every written value is entered afresh each time, even if it rarely changes (e.g. rego expiry).
+One pass through every Item due on an appliance for a scheduled Check Day, identified by that scheduled date. It's due on that date, but can be started from 2 days before it, is acceptable any time before the next Check is due, and still belongs to its scheduled date and month when it's done late. Every written value is entered afresh each time, even if it rarely changes (e.g. rego expiry).
 _Avoid_: Check run, inspection
 
 **Complete**:

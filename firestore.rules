@@ -44,7 +44,8 @@ service cloud.firestore {
       && checkId == data.applianceId + '_' + data.scheduledDate
       && data.scheduledDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
       && data.scheduledDate >= firstOfPreviousMonth()
-      && data.scheduledDate <= dateString(request.time + duration.value(1, 'd'))
+      // A Check opens EARLY_DAYS (2) NZ days early; +3 UTC days always covers that.
+      && data.scheduledDate <= dateString(request.time + duration.value(3, 'd'))
       && data.checkSheetVersion is int
       && data.checkSheetVersion >= 1
       && data.responses.diff(before).affectedKeys().size() <= 1

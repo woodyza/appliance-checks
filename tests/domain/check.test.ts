@@ -3,6 +3,7 @@ import {
   answerFits,
   defaultCheckDate,
   isComplete,
+  isCompleteAsRendered,
   isFrozen,
   mergeResponses,
   monthlyFor,
@@ -145,6 +146,19 @@ describe('isFrozen', () => {
   })
 })
 
+describe('isCompleteAsRendered', () => {
+  const torchOnly = version({ version: 2, sections: [{ id: 's', title: 'S', items: [item({ id: TORCH })] }] })
+  const c = check({ scheduledDate: '2026-09-21', responses: { [TORCH]: 'Y' } })
+
+  it('scores a Check still in its window against the current version', () => {
+    expect(isCompleteAsRendered(c, version(), torchOnly, '2026-09-27', 1)).toBe(true)
+  })
+
+  it('scores a Check past its window against its stamped version', () => {
+    expect(isCompleteAsRendered(c, version(), torchOnly, '2026-09-28', 1)).toBe(false)
+  })
+})
+
 describe('renderVersion', () => {
   it('returns the stamped version when Frozen', () => {
     expect(renderVersion(check({ checkSheetVersion: 3 }), true, 5)).toBe(3)
@@ -177,41 +191,41 @@ describe('defaultCheckDate', () => {
   it('returns the current date when a Check already exists for it', () => {
     const existing = [{ scheduledDate: current, started: false, complete: false }]
 
-    expect(defaultCheckDate(existing, current, current, 1)).toBe(current)
+    expect(defaultCheckDate(existing, current, current, 1, null)).toBe(current)
   })
 
   it('returns the previous Check date when it is started but not Complete', () => {
     const existing = [{ scheduledDate: '2026-09-21', started: true, complete: false }]
 
-    expect(defaultCheckDate(existing, current, current, 1)).toBe('2026-09-21')
+    expect(defaultCheckDate(existing, current, current, 1, null)).toBe('2026-09-21')
   })
 
   it('returns the current date when the previous Check was never started', () => {
     const existing = [{ scheduledDate: '2026-09-21', started: false, complete: false }]
 
-    expect(defaultCheckDate(existing, current, current, 1)).toBe(current)
+    expect(defaultCheckDate(existing, current, current, 1, null)).toBe(current)
   })
 
   it('returns the current date when the previous Check is Complete', () => {
     const existing = [{ scheduledDate: '2026-09-21', started: true, complete: true }]
 
-    expect(defaultCheckDate(existing, current, current, 1)).toBe(current)
+    expect(defaultCheckDate(existing, current, current, 1, null)).toBe(current)
   })
 
   it('returns the current date when there are no existing Checks', () => {
-    expect(defaultCheckDate([], current, current, 1)).toBe(current)
+    expect(defaultCheckDate([], current, current, 1, null)).toBe(current)
   })
 
   it('returns a later existing Check still within its window after a Check Day change', () => {
     const existing = [{ scheduledDate: '2026-09-21', started: true, complete: false }]
 
-    expect(defaultCheckDate(existing, '2026-09-17', '2026-09-22', 4)).toBe('2026-09-21')
+    expect(defaultCheckDate(existing, '2026-09-17', '2026-09-22', 4, null)).toBe('2026-09-21')
   })
 
   it('returns the current date when the started, incomplete previous Check is not the immediately previous one', () => {
     const existing = [{ scheduledDate: '2026-09-07', started: true, complete: false }]
 
-    expect(defaultCheckDate(existing, '2026-09-21', '2026-09-21', 1)).toBe('2026-09-21')
+    expect(defaultCheckDate(existing, '2026-09-21', '2026-09-21', 1, null)).toBe('2026-09-21')
   })
 
   it('only considers the latest previous Check, not an earlier started one', () => {
@@ -220,7 +234,53 @@ describe('defaultCheckDate', () => {
       { scheduledDate: '2026-09-14', started: true, complete: true },
     ]
 
-    expect(defaultCheckDate(existing, '2026-09-21', '2026-09-21', 1)).toBe('2026-09-21')
+    expect(defaultCheckDate(existing, '2026-09-21', '2026-09-21', 1, null)).toBe('2026-09-21')
+  })
+})
+
+describe('defaultCheckDate on an early day', () => {
+  const current = '2026-10-05'
+  const saturday = '2026-10-10'
+  const upcoming = '2026-10-12'
+
+  it('returns the upcoming Check once the current one is Complete', () => {
+    const existing = [{ scheduledDate: current, started: true, complete: true }]
+
+    expect(defaultCheckDate(existing, current, saturday, 1, upcoming)).toBe(upcoming)
+  })
+
+  it('returns the current Check while it is started but not Complete', () => {
+    const existing = [{ scheduledDate: current, started: true, complete: false }]
+
+    expect(defaultCheckDate(existing, current, saturday, 1, upcoming)).toBe(current)
+  })
+
+  it('returns the current Check when nobody has started it', () => {
+    expect(defaultCheckDate([], current, saturday, 1, upcoming)).toBe(current)
+  })
+
+  it('returns the current Check when only the previous one is Complete', () => {
+    const existing = [{ scheduledDate: '2026-09-28', started: true, complete: true }]
+
+    expect(defaultCheckDate(existing, current, saturday, 1, upcoming)).toBe(current)
+  })
+
+  it('returns the current Check over an upcoming one already started', () => {
+    const existing = [{ scheduledDate: upcoming, started: true, complete: false }]
+
+    expect(defaultCheckDate(existing, current, saturday, 1, upcoming)).toBe(current)
+  })
+
+  it('returns the previous Check while it is started but not Complete and the current one is missing', () => {
+    const existing = [{ scheduledDate: '2026-09-28', started: true, complete: false }]
+
+    expect(defaultCheckDate(existing, current, saturday, 1, upcoming)).toBe('2026-09-28')
+  })
+
+  it('returns a Complete current Check when there is no upcoming Check yet', () => {
+    const existing = [{ scheduledDate: current, started: true, complete: true }]
+
+    expect(defaultCheckDate(existing, current, '2026-10-09', 1, null)).toBe(current)
   })
 })
 
@@ -228,39 +288,57 @@ describe('selectorDates', () => {
   it('unions existing dates with computed Check Day dates after a Check Day change, sorted and de-duplicated', () => {
     const existingDates = ['2026-09-07', '2026-09-14']
 
-    const result = selectorDates(existingDates, '2026-09-24', '2026-09-24', '2026-09-24', 4)
+    const result = selectorDates(existingDates, '2026-09-24', '2026-09-24', '2026-09-24', 4, null)
 
     expect(result).toEqual(['2026-09-03', '2026-09-07', '2026-09-10', '2026-09-14', '2026-09-17', '2026-09-24'])
   })
 
   it('spans from the default date month even when the current date is in a later month', () => {
-    const result = selectorDates([], '2026-09-28', '2026-10-05', '2026-10-05', 1)
+    const result = selectorDates([], '2026-09-28', '2026-10-05', '2026-10-05', 1, null)
 
     expect(result).toEqual(['2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28', '2026-10-05'])
   })
 
   it('includes an existing Check still within its window even past the current date', () => {
-    const result = selectorDates(['2026-09-21'], '2026-09-21', '2026-09-17', '2026-09-22', 4)
+    const result = selectorDates(['2026-09-21'], '2026-09-21', '2026-09-17', '2026-09-22', 4, null)
 
     expect(result).toEqual(['2026-09-03', '2026-09-10', '2026-09-17', '2026-09-21'])
   })
 
   it('excludes an existing date after today', () => {
-    const result = selectorDates(['2026-09-24'], '2026-09-17', '2026-09-17', '2026-09-22', 1)
+    const result = selectorDates(['2026-09-24'], '2026-09-17', '2026-09-17', '2026-09-22', 1, null)
 
     expect(result).toEqual(['2026-09-07', '2026-09-14'])
   })
 
   it('counts an existing date equal to a computed one once', () => {
-    const result = selectorDates(['2026-09-14'], '2026-09-14', '2026-09-14', '2026-09-14', 1)
+    const result = selectorDates(['2026-09-14'], '2026-09-14', '2026-09-14', '2026-09-14', 1, null)
 
     expect(result).toEqual(['2026-09-07', '2026-09-14'])
   })
 
   it('excludes an existing date before the default date month', () => {
-    const result = selectorDates(['2026-08-01'], '2026-09-14', '2026-09-14', '2026-09-14', 1)
+    const result = selectorDates(['2026-08-01'], '2026-09-14', '2026-09-14', '2026-09-14', 1, null)
 
     expect(result).toEqual(['2026-09-07', '2026-09-14'])
+  })
+
+  it('includes the upcoming Check on an early day', () => {
+    const result = selectorDates([], '2026-10-05', '2026-10-05', '2026-10-10', 1, '2026-10-12')
+
+    expect(result).toEqual(['2026-10-05', '2026-10-12'])
+  })
+
+  it('includes an existing Check dated after today on an early day', () => {
+    const result = selectorDates(['2026-10-11'], '2026-10-05', '2026-10-05', '2026-10-10', 1, '2026-10-12')
+
+    expect(result).toEqual(['2026-10-05', '2026-10-11', '2026-10-12'])
+  })
+
+  it('spans from the current date month when the upcoming Check defaults into the next month', () => {
+    const result = selectorDates([], '2026-11-02', '2026-10-26', '2026-10-31', 1, '2026-11-02')
+
+    expect(result).toEqual(['2026-10-05', '2026-10-12', '2026-10-19', '2026-10-26', '2026-11-02'])
   })
 })
 
