@@ -3,7 +3,7 @@ import type { RulesTestEnvironment } from '@firebase/rules-unit-testing'
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing'
 import firebase from 'firebase/compat/app'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { addDays, firstOfPreviousMonth, today } from '../../src/domain/schedule'
+import { addDays, EARLY_DAYS, firstOfPreviousMonth, today } from '../../src/domain/schedule'
 import { newId } from '../../src/domain/slug'
 
 let testEnv: RulesTestEnvironment
@@ -20,7 +20,7 @@ const CHECK_PATH = `${BRIGADE_PATH}/checks/8011_${TODAY}`
 
 const UTC_TODAY = new Date().toISOString().slice(0, 10)
 const TOO_EARLY = addDays(firstOfPreviousMonth(UTC_TODAY), -1)
-const TOO_LATE = addDays(UTC_TODAY, 3)
+const TOO_LATE = addDays(UTC_TODAY, 4)
 const BASE_DATE = addDays(TODAY, -3)
 
 const CAB_ID = 'cab22222'
@@ -232,6 +232,16 @@ describe('firestore.rules', () => {
     )
   })
 
+  it('allows starting a Check dated 2 days from today', async () => {
+    const date = addDays(TODAY, EARLY_DAYS)
+
+    await assertSucceeds(
+      unauthedDb()
+        .doc(`${BRIGADE_PATH}/checks/8011_${date}`)
+        .set(checkData({ scheduledDate: date }), { merge: true }),
+    )
+  })
+
   it('lets two contexts answer different Items of a new Check concurrently', async () => {
     const date = addDays(TODAY, -8)
     const path = `${BRIGADE_PATH}/checks/8011_${date}`
@@ -390,7 +400,7 @@ describe('firestore.rules', () => {
     ['a 201-char string', `8011_${BASE_DATE}`, checkData({ responses: { [CAB_ID]: 'x'.repeat(201) } })],
     ['a key not matching the Item id pattern', `8011_${BASE_DATE}`, checkData({ responses: { 'bad-key!': 'Y' } })],
     ['scheduledDate the day before the rules window', `8011_${TOO_EARLY}`, checkData({ scheduledDate: TOO_EARLY })],
-    ['scheduledDate 3 days after UTC today', `8011_${TOO_LATE}`, checkData({ scheduledDate: TOO_LATE })],
+    ['scheduledDate 4 days after UTC today', `8011_${TOO_LATE}`, checkData({ scheduledDate: TOO_LATE })],
     ["scheduledDate '2026-9-1'", '8011_2026-9-1', checkData({ scheduledDate: '2026-9-1' })],
     [
       'scheduledDate with a trailing character that fails the format regex',
