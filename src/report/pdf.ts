@@ -1,5 +1,8 @@
+import type { jsPDF } from 'jspdf'
 import type { CellDef, CellInput, RowInput } from 'jspdf-autotable'
+import { monthLabel, monthlyReportFilename } from '../domain/report'
 import type { MonthlyReport, ReportCell, ReportColumn, ReportRow, ReportSection } from '../domain/report'
+import { formatDateTime } from '../domain/schedule'
 
 const PAGE_WIDTH_MM = 210
 const PAGE_MARGIN_MM = 10
@@ -11,36 +14,15 @@ const GREY: [number, number, number] = [224, 224, 224]
 const NOT_DUE_FILL: [number, number, number] = [90, 90, 90]
 const NA_FILL: [number, number, number] = [235, 235, 235]
 
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-]
-
 // jsPDF's built-in Helvetica only covers WinAnsi, so macrons (Taupō, Ōtaki) would otherwise be
 // dropped: fall back to the base letter.
 function pdfText(text: string): string {
   return text.normalize('NFD').replace(/\p{M}/gu, '')
 }
 
-function pad2(value: number): string {
-  return String(value).padStart(2, '0')
-}
-
 function formatShortDate(date: string): string {
   const [year, month, day] = date.split('-')
   return `${day}/${month}/${year.slice(2)}`
-}
-
-function formatGeneratedAt(date: Date): string {
-  return (
-    `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}/${String(date.getFullYear()).slice(2)} ` +
-    `${pad2(date.getHours())}:${pad2(date.getMinutes())}`
-  )
-}
-
-function monthLabel(month: string): string {
-  const [year, monthNumber] = month.split('-').map(Number)
-  return `${MONTH_NAMES[monthNumber - 1]} ${String(year)}`
 }
 
 // 5 Checks gives about 21mm a pair, as in the March PDF; fewer widen them, and more (after a
@@ -112,7 +94,7 @@ function footRow(columns: ReportColumn[]): RowInput {
   ]
 }
 
-export async function downloadMonthlyReport(report: MonthlyReport, generatedAt: Date): Promise<void> {
+export async function buildMonthlyReportPdf(report: MonthlyReport, generatedAt: Date): Promise<jsPDF> {
   const [{ jsPDF }, { default: autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')])
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
@@ -152,7 +134,12 @@ export async function downloadMonthlyReport(report: MonthlyReport, generatedAt: 
 
   const finalY = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? PAGE_MARGIN_MM + 14
   doc.setFontSize(8)
-  doc.text(`Generated ${formatGeneratedAt(generatedAt)}`, PAGE_MARGIN_MM, finalY + 6)
+  doc.text(`Generated ${formatDateTime(generatedAt)}`, PAGE_MARGIN_MM, finalY + 6)
 
-  doc.save(`${report.callsign}-${report.month}.pdf`)
+  return doc
+}
+
+export async function downloadMonthlyReport(report: MonthlyReport, generatedAt: Date): Promise<void> {
+  const doc = await buildMonthlyReportPdf(report, generatedAt)
+  doc.save(monthlyReportFilename(report.callsign, report.month))
 }

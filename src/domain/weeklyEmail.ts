@@ -33,7 +33,7 @@ export interface WeeklyEmail {
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-const FLAGGED_BACKGROUND = '#fdecea'
+export const FLAGGED_BACKGROUND = '#fdecea'
 
 function scoringVersion(
   check: Check,
@@ -102,12 +102,12 @@ export function groupByRecipient(entries: { summary: BrigadeSummary; recipients:
   return [...byAddress].map(([to, summaries]) => ({ to, summaries: [...summaries] }))
 }
 
-function formatCheckDate(date: string): string {
+export function formatCheckDate(date: string): string {
   const [, month, day] = date.split('-').map(Number)
   return `${WEEKDAYS[weekday(date) - 1]} ${day} ${MONTHS[month - 1]}`
 }
 
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')

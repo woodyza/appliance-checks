@@ -835,6 +835,39 @@ header {
   width: 100%;
   max-width: 36rem;
 }
+/* Each email in the Reports panel is its own block, so neither address reads as shared */
+.report-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.report-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  padding-top: 12px;
+}
+.block-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.block-note {
+  margin: 0 0 4px;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+.vso-tag {
+  margin-left: 6px;
+  color: var(--text-dim);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.7rem;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
 .brigade-details {
   display: flex;
   flex-direction: column;

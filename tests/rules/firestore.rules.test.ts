@@ -683,6 +683,8 @@ describe('brigade details', () => {
   const NEW_PATH = 'brigades/n3wbrg'
   const EDIT_PATH = 'brigades/edt234'
   const EDIT_SETTINGS_PATH = `${EDIT_PATH}/private/settings`
+  const EDIT_MONTHLY_REPORT_PATH = `${EDIT_PATH}/private/monthlyReport`
+  const EDIT_MONTHLY_REPORT_SENT_PATH = `${EDIT_PATH}/private/monthlyReportSent`
   const NEW_BRIGADE = { brigadeId: 'b9', name: 'New Brigade', checkDay: 3, active: true }
   const EDIT_BRIGADE = { brigadeId: 'b1', name: 'Edit Brigade', checkDay: 1, active: true }
 
@@ -796,5 +798,30 @@ describe('brigade details', () => {
     ['a reportEmail over 254 characters', { reportEmail: `${'x'.repeat(250)}@a.nz` }],
   ])('denies settings with %s', async (_name, data) => {
     await assertFails(vic().doc(EDIT_SETTINGS_PATH).set(data))
+  })
+
+  it('allows the brigade\'s Brigade Admin to set and get the Monthly Report email', async () => {
+    await assertSucceeds(jo().doc(EDIT_MONTHLY_REPORT_PATH).set({ enabled: true, email: 'x@example.com' }))
+    await assertSucceeds(jo().doc(EDIT_MONTHLY_REPORT_PATH).get())
+  })
+
+  it('denies an anonymous get of the Monthly Report email', async () => {
+    await assertFails(unauthedDb().doc(EDIT_MONTHLY_REPORT_PATH).get())
+  })
+
+  it('denies an admin of another brigade getting the Monthly Report email', async () => {
+    await assertFails(sam().doc(EDIT_MONTHLY_REPORT_PATH).get())
+  })
+
+  it.each([
+    ['enabled without an address', { enabled: true, email: '' }],
+    ['an extra key', { enabled: false, email: '', extra: 1 }],
+  ])('denies the Monthly Report email with %s', async (_name, data) => {
+    await assertFails(jo().doc(EDIT_MONTHLY_REPORT_PATH).set(data))
+  })
+
+  it('denies a Brigade Admin getting or setting the Monthly Report sent marker', async () => {
+    await assertFails(jo().doc(EDIT_MONTHLY_REPORT_SENT_PATH).get())
+    await assertFails(jo().doc(EDIT_MONTHLY_REPORT_SENT_PATH).set({ month: '2026-09' }))
   })
 })

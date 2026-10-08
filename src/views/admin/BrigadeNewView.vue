@@ -14,7 +14,7 @@ const gate = useAdminGate(
   "Couldn't load your admin access.",
 )
 
-const initial: BrigadeDraft = { name: '', checkDay: null, active: true, reportEmail: '', weeklyEmail: true }
+const initial: BrigadeDraft = { name: '', checkDay: null, active: true }
 const saving = ref(false)
 const problem = ref<string | null>(null)
 
@@ -46,7 +46,6 @@ async function save(brigade: NormalisedBrigade): Promise<void> {
         class="admin-form"
         :initial="initial"
         active="hidden"
-        show-settings
         submit-label="Create"
         :saving="saving"
         @save="save"

@@ -109,15 +109,19 @@ npm run cli:import-check-sheet -- --project dev --brigade <slug> --appliance 801
 
 Hosting sends `X-Robots-Tag: noindex, nofollow` and serves a `robots.txt` that disallows everything, so well-behaved crawlers don't index the site even if a link leaks.
 
-`make deploy` also deploys the `weeklyVsoEmail` function when billing is enabled on the project (esbuild bundles it into the gitignored `functions/lib/` first), and otherwise skips it with a warning. If billing is on but provision's functions step hasn't run (no `GMAIL_APP_PASSWORD` secret, or no `MAIL_FROM` in `functions/.env.<env>`), it stops before deploying anything and tells you to run `make provision` first. It replaces Hosting content and Firestore rules. `firestore.indexes.json` is the source of truth for indexes, so if any were created in the console the deploy offers to delete them: answer No unless you mean it.
+`make deploy` also deploys the `dailyEmails` function when billing is enabled on the project (esbuild bundles it into the gitignored `functions/lib/` first), and otherwise skips it with a warning. If billing is on but provision's functions step hasn't run (no `GMAIL_APP_PASSWORD` secret, or no `MAIL_FROM` in `functions/.env.<env>`), it stops before deploying anything and tells you to run `make provision` first. It replaces Hosting content and Firestore rules. `firestore.indexes.json` is the source of truth for indexes, so if any were created in the console the deploy offers to delete them: answer No unless you mean it.
 
 Appliances and their Check Sheets can also be added in the admin UI instead (`/<slug>/admin`, signed in as the superadmin), including the Google Sheet import.
 
 The spreadsheet id is the long string in the sheet's URL (`/spreadsheets/d/<id>/edit`), and the sheet must be viewable by anyone with the link.
 
-### Weekly VSO email
+### Daily emails
 
-`weeklyVsoEmail` runs at 07:00 NZ time every day and emails the brigades whose Check Day is that day, covering the previous Check: one email per address, with a row per appliance (Complete, n%, or not started; anything under 100% is highlighted). A brigade goes to its Report Email if it has one, otherwise to the VSOs assigned to it. Brigades can opt out. Per-brigade settings live in `brigades/{slug}/private/settings`, and nothing in the UI edits them yet (#22), so use the CLI:
+`dailyEmails` runs at 07:00 NZ time every day and sends the weekly VSO email, then the Monthly Report email. It was `weeklyVsoEmail` before the Monthly Report email, so the first deploy to `dev` offers to delete that function: answer Yes.
+
+#### Weekly VSO email
+
+Emails the brigades whose Check Day is that day, covering the previous Check: one email per address, with a row per appliance (Complete, n%, or not started; anything under 100% is highlighted). A brigade goes to its Report Email if it has one, otherwise to the VSOs assigned to it. Brigades can opt out. Per-brigade settings live in `brigades/{slug}/private/settings`. VSOs and the superadmin edit them in the Reports panel on the brigade's admin page, or use the CLI:
 
 ```bash
 npm run cli:brigade-settings -- --project dev --brigade <slug> --report-email <addr>    # or --clear-report-email
@@ -129,11 +133,17 @@ It prints the settings before and after. Run it after `make e2e ENV=dev`, whose 
 To run the job by hand:
 
 ```bash
-gcloud scheduler jobs run firebase-schedule-weeklyVsoEmail-australia-southeast1 --location australia-southeast1 --project <project id>
-npx firebase functions:log --only weeklyVsoEmail --project <env>
+gcloud scheduler jobs run firebase-schedule-dailyEmails-australia-southeast1 --location australia-southeast1 --project <project id>
+npx firebase functions:log --only dailyEmails --project <env>
 ```
 
-The logs list each email sent, each brigade skipped (and why) and each failure. The function never retries, so a failed send isn't repeated until the next Check Day.
+The logs list each email sent, each brigade skipped (and why) and each failure. The function never retries, so a failed weekly send isn't repeated until the next Check Day.
+
+#### Monthly Report email
+
+A brigade's Brigade Admins or VSOs turn this on in the Reports panel on its admin page, with an address (`brigades/{slug}/private/monthlyReport`). Once the month's last Check is done for every appliance, or a week after it with whatever is there, the brigade gets one email with a PDF Monthly Report per appliance. It's sent once a month: `private/monthlyReportSent` records the month, and only the function can read or write it. A failed send leaves no record, so the next day's run retries it. Turning it on catches up the most recent month only.
+
+It runs in the same job, so the run and log commands above cover it. Its log lines are `Sent Monthly Report email`, `Skipped Monthly Report brigade` and `Monthly Report email failed`.
 
 ## 5. E2E against dev
 

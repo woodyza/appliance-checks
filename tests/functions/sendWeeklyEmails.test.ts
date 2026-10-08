@@ -2,8 +2,8 @@ import type { Firestore } from 'firebase-admin/firestore'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { addAppliance, createBrigade, writeVersion } from '../../cli/lib/store'
 import { resolveTarget } from '../../cli/lib/target'
+import type { EmailMessage } from '../../functions/src/email'
 import { sendWeeklyEmails } from '../../functions/src/sendWeeklyEmails'
-import type { WeeklyEmailMessage } from '../../functions/src/sendWeeklyEmails'
 import type { BrigadeSettings, Section } from '../../src/domain/types'
 
 const EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST ?? '127.0.0.1:8080'
@@ -55,9 +55,9 @@ async function seedBrigade(name: string, { checkDay = MONDAY, active = true, set
 }
 
 let db: Firestore
-let messages: WeeklyEmailMessage[]
+let messages: EmailMessage[]
 
-async function recordMessage(message: WeeklyEmailMessage): Promise<void> {
+async function recordMessage(message: EmailMessage): Promise<void> {
   messages.push(message)
 }
 
@@ -91,7 +91,7 @@ describe('sendWeeklyEmails', () => {
   it('still sends the other emails, and reports the failure, when one send throws', async () => {
     await seedBrigade('Alpha', { settings: { reportEmail: 'alpha@x.nz' } })
     await seedBrigade('Bravo', { settings: { reportEmail: 'bravo@x.nz' } })
-    const send = async (message: WeeklyEmailMessage): Promise<void> => {
+    const send = async (message: EmailMessage): Promise<void> => {
       if (message.to === 'alpha@x.nz') throw new Error('mailbox full')
       await recordMessage(message)
     }

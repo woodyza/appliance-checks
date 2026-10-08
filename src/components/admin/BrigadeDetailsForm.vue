@@ -3,11 +3,10 @@ import { reactive, ref } from 'vue'
 import { type BrigadeDraft, CHECK_DAYS, type NormalisedBrigade, normaliseBrigade } from '../../domain/brigade'
 
 // `active` is 'hidden' on create (a new brigade is always active), and 'readonly' for anyone but
-// the superadmin. The report settings are hidden from a Brigade Admin.
+// the superadmin.
 const props = defineProps<{
   initial: BrigadeDraft
   active: 'hidden' | 'editable' | 'readonly'
-  showSettings: boolean
   submitLabel: string
   saving: boolean
 }>()
@@ -70,7 +69,7 @@ function submit(): void {
           type="checkbox"
           class="brigade-active"
         >
-        Active
+        Brigade is active
       </label>
       <div
         v-else
@@ -78,27 +77,6 @@ function submit(): void {
       >
         {{ draft.active ? 'Active' : 'Inactive' }}
       </div>
-    </template>
-
-    <template v-if="props.showSettings">
-      <div class="picker-heading">
-        Report Email
-      </div>
-      <input
-        v-model="draft.reportEmail"
-        type="email"
-        class="item-input report-email"
-        placeholder="Blank: the brigade's VSOs"
-      >
-
-      <label class="checkbox-row">
-        <input
-          v-model="draft.weeklyEmail"
-          type="checkbox"
-          class="weekly-email"
-        >
-        Send the weekly email
-      </label>
     </template>
 
     <p

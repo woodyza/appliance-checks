@@ -14,6 +14,11 @@ export interface BrigadeSettings {
   weeklyEmail?: boolean
 }
 
+export interface MonthlyReportSettings {
+  enabled?: boolean
+  email?: string
+}
+
 export interface Appliance {
   callsign: string
   active: boolean

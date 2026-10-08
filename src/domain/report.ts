@@ -2,6 +2,11 @@ import { answerFits, checkPercent, isDue, isFrozen, monthlyFor, renderVersion } 
 import { addDays, checkDatesBetween, currentCheckDate, firstOfNextMonth } from './schedule'
 import type { Appliance, Brigade, Check, CheckSheetVersion, Item } from './types'
 
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
+
 export type ReportCell =
   | { kind: 'na' }
   | { kind: 'notDue' }
@@ -114,6 +119,15 @@ function mergeSections(base: CheckSheetVersion, olderVersions: CheckSheetVersion
   }
 
   return merged
+}
+
+export function monthLabel(month: string): string {
+  const [year, monthNumber] = month.split('-').map(Number)
+  return `${MONTH_NAMES[monthNumber - 1]} ${String(year)}`
+}
+
+export function monthlyReportFilename(callsign: string, month: string): string {
+  return `${callsign}-${month}.pdf`
 }
 
 export function buildMonthlyReport(args: BuildMonthlyReportArgs): MonthlyReport {
