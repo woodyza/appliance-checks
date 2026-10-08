@@ -16,7 +16,7 @@ const NA_FILL: [number, number, number] = [235, 235, 235]
 
 // jsPDF's built-in Helvetica only covers WinAnsi, so macrons (Taupō, Ōtaki) would otherwise be
 // dropped: fall back to the base letter.
-function pdfText(text: string): string {
+export function pdfText(text: string): string {
   return text.normalize('NFD').replace(/\p{M}/gu, '')
 }
 

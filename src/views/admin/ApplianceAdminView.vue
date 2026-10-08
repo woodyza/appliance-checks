@@ -45,7 +45,6 @@ watch(
 )
 
 const callsign = computed(() => editor.appliance.value?.callsign ?? 'Appliance')
-const qrLink = `${window.location.origin}/${slug}/${applianceId}`
 const callsignMessage = ref<string | null>(null)
 const removedExpanded = ref(false)
 
@@ -84,9 +83,7 @@ async function onActiveChange(event: Event): Promise<void> {
   const active = box.checked
   if (
     !active &&
-    !window.confirm(
-      `${appliance.callsign} will drop off the Brigade Link, and its QR link (${qrLink}) will stop opening a Check. Deactivate it?`,
-    )
+    !window.confirm(`${appliance.callsign} will drop off the Brigade Link. Deactivate it?`)
   ) {
     box.checked = true
     return
@@ -101,15 +98,6 @@ async function onActiveChange(event: Event): Promise<void> {
     editor.showToast(isPermissionDenied(err) ? 'Not authorised.' : "Couldn't save", true)
   } finally {
     activeSaving.value = false
-  }
-}
-
-async function copyQr(): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(qrLink)
-    editor.showToast('Copied', false)
-  } catch {
-    editor.showToast("Couldn't copy", true)
   }
 }
 
@@ -252,16 +240,6 @@ async function importFromSheet(): Promise<void> {
             @change="onActiveChange"
           >
         </label>
-        <div class="field qr-field">
-          <span class="field-label">QR link</span>
-          <code class="qr-link">{{ qrLink }}</code>
-          <button
-            class="small-btn copy-qr"
-            @click="copyQr"
-          >
-            Copy
-          </button>
-        </div>
       </div>
       <p
         v-if="callsignMessage"

@@ -45,6 +45,15 @@ ASCII art for decoration was explored and left out for now.
 - **Manual:** scan a generated PDF, both on screen and printed, with a phone.
 - Not tested: that the QR code decodes. That's the library's job, and testing it would need a decoder dependency.
 
+## Changes during implementation
+
+- **Two-line titles split evenly:** the break goes where the longer line is shortest (e.g. "Local Brigade / Appliance Checks", not "Local Brigade Appliance / Checks").
+- **Text under the code is placed from the code's own square size**, so the 4-square margin holds whatever QR version the URL needs. The margin above relies on fixed positions, which leave enough room for every version a Brigade Link can produce.
+- **Each row of squares overlaps the next by 0.1mm**, so PDF viewers don't draw hairline seams between rows.
+- **Docs and the CLI:** README, `docs/infra-setup.md` and `provision`'s site-id warning now talk about the brigade's QR code and Brigade Links, not per-appliance QR codes.
+- **The e2e test checks more:** it looks for the title and the full Brigade Link as text in the PDF, not just the slug.
+- **The QR check was automated, not done on a phone:** generated PDFs were decoded with macOS's QR detector at screen and print resolution, and all decoded correctly. Open follow-up: scan a printed sheet with a phone.
+
 ## Out of scope
 
 Per-appliance QR codes; decorative art; link rotation (ADR 0001) beyond reprinting this sheet.
