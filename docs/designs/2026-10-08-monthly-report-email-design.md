@@ -30,7 +30,7 @@ Earlier Checks in the month never affect the decision. Only the most recent mont
 | Thu 8 Oct, just turned on | Tue 29 Sep | anything | send September |
 | Fri 9 Oct | Tue 29 Sep | marker says `2026-09` | skip |
 
-Accepted limitation: a Check Day change near the end of a month can put L on a date with no Checks, so they score 0% and the email waits for the fallback. The PDFs are still right, since `buildMonthlyReport` includes Checks on their actual dates. Same as the weekly email.
+Accepted limitation: a Check Day change near the end of a month can put L on a date with no Checks. Usually they score 0% and the email waits for the fallback, but L can also land more than a week back (eg Tuesday → Thursday on Thu 1 Oct puts L on Thu 24 Sep), so the month goes out while its real last Check (Tue 29 Sep) is still open, and isn't resent. The PDFs show Checks on their actual dates, so the gap is visible. Rare enough not to handle.
 
 ## Data and rules
 
@@ -57,7 +57,7 @@ Accepted limitation: a Check Day change near the end of a month can put L on a d
 ## Admin UI
 
 - The brigade admin page's details form gets a "Monthly Report email" block, shown to Brigade Admins and VSOs alike: a checkbox, "Email the Monthly Reports when the month's Checks are done", and an address. Hidden on the new-brigade form, since no doc means off.
-- `BrigadeDraft` / `normaliseBrigade` gain `monthlyReportEnabled` and `monthlyReportEmail`. Ticked with a blank address → "Add an address to email the Monthly Reports". An invalid address gets the existing invalid-email problem. The address is kept when unticked.
+- `BrigadeDraft` / `normaliseBrigade` gain `monthlyReportEnabled` and `monthlyReportEmail`. Ticked with a blank address → "Add an address to email the Monthly Reports". An invalid address → "Enter a valid Monthly Report email address.", ticked or not. The address is kept when unticked.
 - The page reads the doc on load, and `updateBrigade` writes it in the same batch as the brigade details.
 - No CLI changes.
 
@@ -73,3 +73,11 @@ Accepted limitation: a Check Day change near the end of a month can put L on a d
 - `tests/rules`: a Brigade Admin can write `monthlyReport`; anonymous users can't read it; `enabled` without an address is rejected; clients can't read or write the marker.
 - `tests/e2e/brigadeDetails.spec.ts`: a Brigade Admin turns it on with an address; a blank address shows the problem.
 - On `dev`, for the PR: point a seeded brigade at an inbox, run the Scheduler job by hand, and check the logs, as #24 did.
+
+## Changes during implementation
+
+- The invalid-address problem names the Monthly Report email rather than reusing the Report Email's message, and applies whether or not the box is ticked.
+- "Already sent" and "waiting" brigades aren't logged as skipped, so opted-in brigades don't log every day. "On without a valid address" and "no Appliances with a Check Sheet" are.
+- If the marker write fails after a successful send, the brigade is logged as both sent and failed, and the next run sends a duplicate (the accepted trade-off above).
+- The function now fails on a day when only the Monthly Report pass failed. If the weekly pass throws before it gets going, the Monthly Report pass waits for the next day's run.
+- Review found the Check Day change limitation also covers sending early, not just waiting. Recorded above rather than handled.

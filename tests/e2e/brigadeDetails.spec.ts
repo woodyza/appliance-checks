@@ -76,3 +76,21 @@ test("a VSO sets their brigade's Report Email", async ({ page }) => {
   await expect(page.locator('.report-email')).toHaveValue('e2e-team@example.com')
   await expect(page.locator('.weekly-email')).not.toBeChecked()
 })
+
+test("a Brigade Admin sets their brigade's Monthly Report email", async ({ page }) => {
+  await signIn(page, BRIGADE_ADMIN_EMAIL)
+  await expect(page).toHaveURL('/e2etst/admin')
+
+  await page.locator('.monthly-report-enabled').check()
+  await page.locator('.monthly-report-email').fill('')
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.locator('.error-msg')).toHaveText('Add an address to email the Monthly Reports.')
+
+  await page.locator('.monthly-report-email').fill('  Reports@Example.com ')
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.locator('#toast')).toContainText('Saved')
+
+  await page.reload()
+  await expect(page.locator('.monthly-report-enabled')).toBeChecked()
+  await expect(page.locator('.monthly-report-email')).toHaveValue('reports@example.com')
+})

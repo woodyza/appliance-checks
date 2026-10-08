@@ -11,6 +11,20 @@ export function today(now: Date = new Date()): string {
   return `${get('year')}-${get('month')}-${get('day')}`
 }
 
+export function formatDateTime(date: Date): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: CHECK_TIME_ZONE,
+    year: '2-digit',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date)
+  const get = (type: string): string => parts.find((part) => part.type === type)!.value
+  return `${get('day')}/${get('month')}/${get('year')} ${get('hour')}:${get('minute')}`
+}
+
 function parseDate(date: string): Date {
   const [year, month, day] = date.split('-').map(Number)
   return new Date(Date.UTC(year, month - 1, day))
@@ -58,6 +72,12 @@ export function checkDatesBetween(from: string, to: string, checkDay: number): s
 
 export function isLastOfMonth(date: string): boolean {
   return addDays(date, 7).slice(0, 7) !== date.slice(0, 7)
+}
+
+export function lastCheckOfMonth(today: string, checkDay: number): string {
+  let date = currentCheckDate(today, checkDay)
+  while (!isLastOfMonth(date)) date = addDays(date, -7)
+  return date
 }
 
 export function firstOfMonth(date: string): string {

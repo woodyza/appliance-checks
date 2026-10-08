@@ -4,7 +4,9 @@ import {
   currentCheckDate,
   firstOfNextMonth,
   firstOfPreviousMonth,
+  formatDateTime,
   isLastOfMonth,
+  lastCheckOfMonth,
   nextCheckDate,
   recentMonths,
   today,
@@ -85,5 +87,29 @@ describe('firstOfNextMonth', () => {
 describe('recentMonths', () => {
   it('returns the current month first, then earlier months, crossing a year boundary', () => {
     expect(recentMonths('2026-02-10', 3)).toEqual(['2026-02', '2026-01', '2025-12'])
+  })
+})
+
+describe('lastCheckOfMonth', () => {
+  it('returns the last Check of the month just gone, the day after it', () => {
+    expect(lastCheckOfMonth('2026-09-30', 2)).toBe('2026-09-29')
+  })
+
+  it("steps back past a current Check that isn't the month's last", () => {
+    expect(lastCheckOfMonth('2026-10-06', 2)).toBe('2026-09-29')
+  })
+
+  it("returns the current Check when it's the month's last", () => {
+    expect(lastCheckOfMonth('2026-10-27', 2)).toBe('2026-10-27')
+  })
+
+  it('crosses a year boundary', () => {
+    expect(lastCheckOfMonth('2027-01-05', 2)).toBe('2026-12-29')
+  })
+})
+
+describe('formatDateTime', () => {
+  it('formats in NZ time, not UTC', () => {
+    expect(formatDateTime(new Date('2026-09-30T19:30:00Z'))).toBe('01/10/26 08:30')
   })
 })

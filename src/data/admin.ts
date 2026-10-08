@@ -18,7 +18,7 @@ import { batches } from '../domain/adminProfile'
 import type { NormalisedBrigade } from '../domain/brigade'
 import { firstOfNextMonth } from '../domain/schedule'
 import { generateSlug } from '../domain/slug'
-import type { AdminRole, AdminUser, Brigade, BrigadeSettings, Check } from '../domain/types'
+import type { AdminRole, AdminUser, Brigade, BrigadeSettings, Check, MonthlyReportSettings } from '../domain/types'
 import { db } from '../firebase'
 
 export interface BrigadeSummary {
@@ -120,6 +120,15 @@ export async function getBrigadeSettings(slug: string): Promise<BrigadeSettings>
   return snap.exists() ? (snap.data() as BrigadeSettings) : {}
 }
 
+function monthlyReportRef(slug: string) {
+  return doc(db, 'brigades', slug, 'private', 'monthlyReport')
+}
+
+export async function getMonthlyReportSettings(slug: string): Promise<MonthlyReportSettings> {
+  const snap = await getDoc(monthlyReportRef(slug))
+  return snap.exists() ? (snap.data() as MonthlyReportSettings) : {}
+}
+
 class SlugTaken extends Error {}
 
 const SLUG_ATTEMPTS = 5
@@ -152,6 +161,8 @@ export interface BrigadeUpdateScope {
   active: boolean
   /** The rules keep the settings from a Brigade Admin. */
   settings: boolean
+  /** Any admin of the brigade can change its Monthly Report email. */
+  monthlyReport: boolean
 }
 
 export async function updateBrigade(slug: string, fields: NormalisedBrigade, scope: BrigadeUpdateScope): Promise<void> {
@@ -167,6 +178,12 @@ export async function updateBrigade(slug: string, fields: NormalisedBrigade, sco
       { reportEmail: fields.reportEmail ?? deleteField(), weeklyEmail: fields.weeklyEmail },
       { merge: true },
     )
+  }
+  if (scope.monthlyReport) {
+    batch.set(monthlyReportRef(slug), {
+      enabled: fields.monthlyReportEnabled,
+      email: fields.monthlyReportEmail ?? '',
+    })
   }
   await batch.commit()
 }

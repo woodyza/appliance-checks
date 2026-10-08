@@ -68,7 +68,7 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/brigades/$(slug)).data.brigadeId in adminBrigadeIds());
     }
 
-    // Where and whether a brigade's reports are emailed is for its VSOs and the superadmin, not
+    // Where and whether a brigade's weekly email goes is for its VSOs and the superadmin, not
     // its Brigade Admin: the one place the rules read `role`, which only the superadmin writes.
     function isBrigadeVso(slug) {
       return isSuperadmin() || (isBrigadeAdmin(slug)
@@ -135,6 +135,19 @@ service cloud.firestore {
           && (!('reportEmail' in request.resource.data)
             || (request.resource.data.reportEmail is string && request.resource.data.reportEmail.size() <= 254))
           && (!('weeklyEmail' in request.resource.data) || request.resource.data.weeklyEmail is bool);
+        allow delete: if false;
+      }
+
+      // Unlike the settings, any admin of the brigade sets this. `private/monthlyReportSent` has no
+      // rule, so only the function reads or writes it.
+      match /private/monthlyReport {
+        allow read: if isBrigadeAdmin(slug);
+        allow create, update: if isBrigadeAdmin(slug)
+          && request.resource.data.keys().hasOnly(['enabled', 'email'])
+          && request.resource.data.enabled is bool
+          && request.resource.data.email is string
+          && request.resource.data.email.size() <= 254
+          && (!request.resource.data.enabled || request.resource.data.email.size() > 0);
         allow delete: if false;
       }
 

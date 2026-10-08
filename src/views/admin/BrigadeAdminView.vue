@@ -4,14 +4,20 @@ import { useRoute, useRouter } from 'vue-router'
 import BrigadeDetailsForm from '../../components/admin/BrigadeDetailsForm.vue'
 import AdminFrame from '../../components/AdminFrame.vue'
 import { ApplianceIdTaken, addAppliance, getDraft, listAllAppliances } from '../../data/checkSheet'
-import { type BrigadeSummary, getBrigadeSettings, listChecksInMonth, updateBrigade } from '../../data/admin'
+import {
+  type BrigadeSummary,
+  getBrigadeSettings,
+  getMonthlyReportSettings,
+  listChecksInMonth,
+  updateBrigade,
+} from '../../data/admin'
 import { type ApplianceSummary, getVersion } from '../../data/checks'
 import { canManageBrigadeSettings, hasBrigadeList } from '../../domain/adminProfile'
 import { applianceIdProblem, callsignProblem, suggestApplianceId } from '../../domain/appliance'
 import type { BrigadeDraft, NormalisedBrigade } from '../../domain/brigade'
 import { buildMonthlyReport } from '../../domain/report'
 import { recentMonths, today } from '../../domain/schedule'
-import type { CheckSheetVersion } from '../../domain/types'
+import type { BrigadeSettings, CheckSheetVersion } from '../../domain/types'
 import { wantsWeeklyEmail } from '../../domain/weeklyEmail'
 import { isPermissionDenied, loadBrigadeForAdmin, useAdminGate } from '../../state/adminGate'
 
@@ -102,13 +108,18 @@ async function loadDrafts(list: ApplianceSummary[]): Promise<void> {
 async function loadDetails(summary: BrigadeSummary): Promise<void> {
   try {
     // A Brigade Admin can't read the settings, and the form hides them anyway.
-    const settings = showSettings.value ? await getBrigadeSettings(slug) : {}
+    const [settings, monthlyReport] = await Promise.all([
+      showSettings.value ? getBrigadeSettings(slug) : Promise.resolve<BrigadeSettings>({}),
+      getMonthlyReportSettings(slug),
+    ])
     details.value = {
       name: summary.brigade.name,
       checkDay: summary.brigade.checkDay,
       active: summary.brigade.active,
       reportEmail: settings.reportEmail ?? '',
       weeklyEmail: wantsWeeklyEmail(settings),
+      monthlyReportEnabled: monthlyReport.enabled === true,
+      monthlyReportEmail: monthlyReport.email ?? '',
     }
   } catch (err) {
     console.error(err)
@@ -122,10 +133,19 @@ async function saveDetails(fields: NormalisedBrigade): Promise<void> {
   savingDetails.value = true
   try {
     const canChangeActive = activeMode.value === 'editable'
-    await updateBrigade(slug, fields, { active: canChangeActive, settings: showSettings.value })
+    await updateBrigade(slug, fields, {
+      active: canChangeActive,
+      settings: showSettings.value,
+      monthlyReport: true,
+    })
     const active = canChangeActive ? fields.active : summary.brigade.active
     gate.data.value = { slug, brigade: { ...summary.brigade, name: fields.name, checkDay: fields.checkDay, active } }
-    details.value = { ...fields, active, reportEmail: fields.reportEmail ?? '' }
+    details.value = {
+      ...fields,
+      active,
+      reportEmail: fields.reportEmail ?? '',
+      monthlyReportEmail: fields.monthlyReportEmail ?? '',
+    }
     detailsVersion.value++
     showToast('Saved', false)
   } catch (err) {
@@ -261,6 +281,7 @@ async function download(): Promise<void> {
             :initial="details"
             :active="activeMode"
             :show-settings="showSettings"
+            show-monthly-report
             submit-label="Save"
             :saving="savingDetails"
             @save="saveDetails"

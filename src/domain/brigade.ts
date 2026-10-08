@@ -11,7 +11,7 @@ export const CHECK_DAYS: { value: number; label: string }[] = [
 ]
 
 const MAX_NAME_LENGTH = 60
-const MAX_EMAIL_LENGTH = 254
+export const MAX_EMAIL_LENGTH = 254
 
 export interface BrigadeDraft {
   name: string
@@ -19,6 +19,8 @@ export interface BrigadeDraft {
   active: boolean
   reportEmail: string
   weeklyEmail: boolean
+  monthlyReportEnabled: boolean
+  monthlyReportEmail: string
 }
 
 export interface NormalisedBrigade {
@@ -27,6 +29,8 @@ export interface NormalisedBrigade {
   active: boolean
   reportEmail: string | null
   weeklyEmail: boolean
+  monthlyReportEnabled: boolean
+  monthlyReportEmail: string | null
 }
 
 export type NormaliseBrigadeResult = { ok: true; brigade: NormalisedBrigade } | { ok: false; problem: string }
@@ -42,8 +46,24 @@ export function normaliseBrigade(draft: BrigadeDraft): NormaliseBrigadeResult {
     return { ok: false, problem: 'Enter a valid Report Email, or leave it blank.' }
   }
 
+  const monthlyReportEmail = draft.monthlyReportEmail.trim().toLowerCase() || null
+  if (draft.monthlyReportEnabled && monthlyReportEmail === null) {
+    return { ok: false, problem: 'Add an address to email the Monthly Reports.' }
+  }
+  if (monthlyReportEmail !== null && (!isValidEmail(monthlyReportEmail) || monthlyReportEmail.length > MAX_EMAIL_LENGTH)) {
+    return { ok: false, problem: 'Enter a valid Monthly Report email address.' }
+  }
+
   return {
     ok: true,
-    brigade: { name, checkDay: draft.checkDay, active: draft.active, reportEmail, weeklyEmail: draft.weeklyEmail },
+    brigade: {
+      name,
+      checkDay: draft.checkDay,
+      active: draft.active,
+      reportEmail,
+      weeklyEmail: draft.weeklyEmail,
+      monthlyReportEnabled: draft.monthlyReportEnabled,
+      monthlyReportEmail,
+    },
   }
 }
