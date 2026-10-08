@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { type AdminProfile, adminHomePath, batches, canManage, hasHub } from '../../src/domain/adminProfile'
+import {
+  type AdminProfile,
+  adminHomePath,
+  batches,
+  canManage,
+  canManageBrigadeSettings,
+  hasBrigadeList,
+} from '../../src/domain/adminProfile'
 
 const superadmin: AdminProfile = { kind: 'superadmin' }
 const vso: AdminProfile = { kind: 'admin', role: 'vso', brigadeIds: ['b1', 'b2'], homeSlug: 'abc123' }
@@ -12,11 +19,14 @@ function brigadeAdmin(homeSlug: string | null): AdminProfile {
 describe('adminHomePath', () => {
   it.each([
     ['a superadmin', superadmin],
-    ['a VSO', vso],
     ['a Brigade Admin with no home brigade', brigadeAdmin(null)],
     ['no admin profile', none],
   ])('is the hub for %s', (_label, profile) => {
     expect(adminHomePath(profile)).toBe('/admin')
+  })
+
+  it('is the brigade list for a VSO', () => {
+    expect(adminHomePath(vso)).toBe('/admin/brigades')
   })
 
   it("is the brigade's admin page for a Brigade Admin with a home brigade", () => {
@@ -24,14 +34,14 @@ describe('adminHomePath', () => {
   })
 })
 
-describe('hasHub', () => {
+describe('hasBrigadeList', () => {
   it.each([
     ['a superadmin', superadmin, true],
     ['a VSO', vso, true],
     ['a Brigade Admin', brigadeAdmin('abc123'), false],
     ['no admin profile', none, false],
   ])('for %s is %s', (_label, profile, expected) => {
-    expect(hasHub(profile)).toBe(expected)
+    expect(hasBrigadeList(profile)).toBe(expected)
   })
 })
 
@@ -50,6 +60,17 @@ describe('canManage', () => {
 
   it('stops someone with no admin profile', () => {
     expect(canManage(none, 'b1')).toBe(false)
+  })
+})
+
+describe('canManageBrigadeSettings', () => {
+  it.each([
+    ['a superadmin', superadmin, true],
+    ['a VSO', vso, true],
+    ['a Brigade Admin', brigadeAdmin('abc123'), false],
+    ['no admin profile', none, false],
+  ])('for %s is %s', (_label, profile, expected) => {
+    expect(canManageBrigadeSettings(profile)).toBe(expected)
   })
 })
 

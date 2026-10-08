@@ -1,20 +1,10 @@
 <script setup lang="ts">
 import AdminFrame from '../../components/AdminFrame.vue'
-import type { BrigadeSummary } from '../../data/admin'
-import { hasHub } from '../../domain/adminProfile'
-import { listBrigadesFor, NOT_AUTHORISED, useAdminGate } from '../../state/adminGate'
+import { NOT_AUTHORISED, useAdminGate } from '../../state/adminGate'
 
-interface Hub {
-  brigades: BrigadeSummary[]
-  userAdmin: boolean
-}
-
-const gate = useAdminGate<Hub>(
-  async (profile) =>
-    hasHub(profile)
-      ? { brigades: await listBrigadesFor(profile), userAdmin: profile.kind === 'superadmin' }
-      : NOT_AUTHORISED,
-  "Couldn't load brigades.",
+const gate = useAdminGate(
+  async (profile) => (profile.kind === 'superadmin' ? true : NOT_AUTHORISED),
+  "Couldn't load your admin access.",
 )
 </script>
 
@@ -28,12 +18,11 @@ const gate = useAdminGate<Hub>(
   >
     <div class="screen active screen-picker">
       <router-link
-        v-if="gate.data.value?.userAdmin"
         to="/admin/users"
         class="appliance-card"
       >
         <div class="appliance-card-name">
-          User admin
+          Users
         </div>
         <div class="section-chevron">
           <span class="chev chev-right" />
@@ -41,13 +30,11 @@ const gate = useAdminGate<Hub>(
       </router-link>
 
       <router-link
-        v-for="entry in gate.data.value?.brigades ?? []"
-        :key="entry.slug"
-        :to="`/${entry.slug}`"
+        to="/admin/brigades"
         class="appliance-card"
       >
         <div class="appliance-card-name">
-          {{ entry.brigade.name }}{{ entry.brigade.active ? '' : ' (inactive)' }}
+          Brigades
         </div>
         <div class="section-chevron">
           <span class="chev chev-right" />

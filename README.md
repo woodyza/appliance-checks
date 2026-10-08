@@ -62,16 +62,18 @@ Env files: `.env.development` is committed (emulator config). `.env.dev` / `.env
 
 `/admin/sign-in` (passwordless email link) leads to where the person's role starts:
 
-- A superadmin gets `/admin`, a hub with "User admin" plus a link per brigade.
-- A VSO gets `/admin` too, but only their brigades and no "User admin". On a brigade's page they get "‹ Brigades", and "Manage" for the brigades they're assigned to.
-- A Brigade Admin goes straight to `/:slug/admin` for their one brigade (`/admin` redirects there), where Sign out lives. "Manage" on that brigade's page takes them back, and there's no "‹ Brigades".
+- A superadmin gets `/admin`, a hub with "Users" and "Brigades".
+- A VSO gets `/admin/brigades`, a list of just their brigades (`/admin` redirects there). On a brigade's checks page they get "‹ Brigades", and "Manage" for the brigades they're assigned to.
+- A Brigade Admin goes straight to `/:slug/admin` for their one brigade (`/admin` redirects there), where Sign out lives. "Manage" on that brigade's checks page takes them back, and there's no "‹ Brigades".
 
-The landing page's "Admin" link goes to `/admin` and relies on that redirect. Anyone else who signs in sees "Not authorised". Other screens: `/admin/users` (add, edit and remove Brigade Admins and VSOs), `/:slug/admin` and `/:slug/admin/:applianceId`.
+The landing page's "Admin" link goes to `/admin` and relies on that redirect. Anyone else who signs in sees "Not authorised". Other screens:
 
-- `/:slug/admin` lists the brigade's appliances (including inactive ones) with a "+ Add appliance" row, and has the Monthly Report picker and PDF download.
+- `/admin/users` lists Brigade Admins and VSOs, with "+ New user" (`/admin/users/new`); tapping one opens `/admin/users/:email` to edit or remove them.
+- `/admin/brigades` lists brigades, each opening its `/:slug/admin`; the superadmin also gets "+ New brigade" (`/admin/brigades/new`).
+- `/:slug/admin` has three sections. Details edits the brigade's name and Check Day, and, for a VSO or the superadmin, its Report Email and weekly email; only the superadmin can deactivate a brigade, and nothing deletes one. Appliances lists its appliances (including inactive ones), each with "Checks" (its check entry, disabled when that can't run) and "Edit", plus a "+ Add appliance" row. Reports has the Monthly Report picker and PDF download.
 - `/:slug/admin/:applianceId` edits one appliance: its Callsign, Active toggle and QR link, and its Check Sheet. Edits to the Check Sheet save to a Draft as you go; a banner summarises what changed, and Publish makes the Draft the Check Sheet that Checks use (or Discard throws it away). You can also copy another appliance's Check Sheet, or import a public Google Sheet (paste its link) from there. Importing in the browser needs `VITE_SHEETS_API_KEY`; see [`docs/infra-setup.md`](./docs/infra-setup.md).
 
-The CLI's `add-appliance` and `import-check-sheet` (below) still work as alternatives. Each admin screen's left header button goes up to its parent, and Sign out is on the hub (or, for a Brigade Admin, on their brigade's `/:slug/admin`). The screens work out who you are in `src/state/auth.ts` (`adminProfile()`: your own `adminUsers` doc, or superadmin by UID) and gate on that in `src/state/adminGate.ts`; `firestore.rules` is still what actually enforces access. The browser needs `VITE_SUPERADMIN_UID` to recognise the superadmin: `.env.development` sets the emulator's, and `make deploy` passes `SUPERADMIN_UID` from `.env.<env>` to the build. `src/state/auth.ts` wraps Firebase Auth; `src/data/admin.ts` reads brigades, admin users and a month's Checks; `src/report/pdf.ts` renders the PDF (jsPDF + jspdf-autotable, lazy-loaded).
+The CLI's `create-brigade`, `brigade-settings`, `add-appliance` and `import-check-sheet` (below) still work as alternatives. Each admin screen's left header button goes up to its parent, and Sign out is on the person's admin home. The screens work out who you are in `src/state/auth.ts` (`adminProfile()`: your own `adminUsers` doc, or superadmin by UID) and gate on that in `src/state/adminGate.ts`; `firestore.rules` is still what actually enforces access. The browser needs `VITE_SUPERADMIN_UID` to recognise the superadmin: `.env.development` sets the emulator's, and `make deploy` passes `SUPERADMIN_UID` from `.env.<env>` to the build. `src/state/auth.ts` wraps Firebase Auth; `src/data/admin.ts` reads and writes brigades, their settings and admin users, and reads a month's Checks; `src/report/pdf.ts` renders the PDF (jsPDF + jspdf-autotable, lazy-loaded).
 
 ## `make` targets
 

@@ -1,176 +1,52 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed } from 'vue'
 import AdminFrame from '../../components/AdminFrame.vue'
-import { createAdminUser, deleteAdminUser, listAdminUsers, listBrigades, updateAdminUser } from '../../data/admin'
-import { type AdminUserDraft, normaliseAdminUser } from '../../domain/adminUser'
-import type { AdminRole, AdminUser } from '../../domain/types'
-import { isPermissionDenied, NOT_AUTHORISED, useAdminGate } from '../../state/adminGate'
-
-interface Toast {
-  text: string
-  isError: boolean
-}
+import { listAdminUsers, listBrigades } from '../../data/admin'
+import type { AdminRole } from '../../domain/types'
+import { NOT_AUTHORISED, useAdminGate } from '../../state/adminGate'
 
 const gate = useAdminGate(
-  async (profile) => (profile.kind === 'superadmin' ? await listBrigades() : NOT_AUTHORISED),
-  "Couldn't load brigades.",
-)
-const brigades = computed(() => gate.data.value ?? [])
-
-const users = ref<AdminUser[]>([])
-const usersLoading = ref(false)
-const usersError = ref<string | null>(null)
-
-const editingEmail = ref<string | null>(null)
-const formProblem = ref<string | null>(null)
-const toast = ref<Toast | null>(null)
-
-function emptyDraft(): AdminUserDraft {
-  return { email: '', displayName: '', role: 'brigadeAdmin', brigadeIds: [] }
-}
-
-const draft = reactive<AdminUserDraft>(emptyDraft())
-
-const singleBrigadeId = computed<string>({
-  get: () => draft.brigadeIds[0] ?? '',
-  set: (value: string) => {
-    draft.brigadeIds = value ? [value] : []
+  async (profile) => {
+    if (profile.kind !== 'superadmin') return NOT_AUTHORISED
+    const [users, brigades] = await Promise.all([listAdminUsers(), listBrigades()])
+    return { users, brigades }
   },
-})
+  "Couldn't load admin users.",
+)
+
+const users = computed(() => gate.data.value?.users ?? [])
 
 function roleLabel(role: AdminRole): string {
   return role === 'brigadeAdmin' ? 'Brigade Admin' : 'VSO'
 }
 
-function brigadeName(id: string): string {
-  return brigades.value.find((entry) => entry.brigade.brigadeId === id)?.brigade.name ?? id
-}
-
 function brigadeNames(ids: string[]): string {
-  return ids.map(brigadeName).join(', ')
-}
-
-function showToast(text: string, isError: boolean): void {
-  toast.value = { text, isError }
-  setTimeout(() => {
-    toast.value = null
-  }, 4000)
-}
-
-watch(
-  () => gate.loading.value,
-  async (loading) => {
-    if (loading || gate.notAuthorised.value || gate.error.value) return
-    usersLoading.value = true
-    try {
-      users.value = await listAdminUsers()
-    } catch (err) {
-      console.error(err)
-      usersError.value = "Couldn't load admin users."
-    } finally {
-      usersLoading.value = false
-    }
-  },
-  { immediate: true },
-)
-
-// The Brigade Admin picker only shows the first brigade, so drop the rest rather than fail
-// validation on a selection the form isn't showing.
-watch(
-  () => draft.role,
-  (role) => {
-    if (role === 'brigadeAdmin' && draft.brigadeIds.length > 1) draft.brigadeIds = draft.brigadeIds.slice(0, 1)
-  },
-)
-
-async function refreshUsers(): Promise<void> {
-  try {
-    users.value = await listAdminUsers()
-  } catch (err) {
-    console.error(err)
-    showToast("Couldn't reload admin users", true)
-  }
-}
-
-function resetForm(): void {
-  editingEmail.value = null
-  Object.assign(draft, emptyDraft())
-  formProblem.value = null
-}
-
-function startEdit(user: AdminUser): void {
-  editingEmail.value = user.email
-  draft.email = user.email
-  draft.displayName = user.displayName ?? ''
-  draft.role = user.role
-  draft.brigadeIds = [...user.brigadeIds]
-  formProblem.value = null
-}
-
-async function save(): Promise<void> {
-  formProblem.value = null
-  const email = editingEmail.value
-  const result = normaliseAdminUser(draft)
-  if (!result.ok) {
-    formProblem.value = result.problem
-    return
-  }
-
-  if (email === null && users.value.some((user) => user.email === result.user.email)) {
-    formProblem.value = 'Already added.'
-    return
-  }
-
-  try {
-    if (email === null) {
-      await createAdminUser(result.user)
-    } else {
-      await updateAdminUser(email, {
-        displayName: result.user.displayName,
-        role: result.user.role,
-        brigadeIds: result.user.brigadeIds,
-      })
-    }
-  } catch (err) {
-    console.error(err)
-    showToast(isPermissionDenied(err) ? 'Not authorised.' : "Couldn't save", true)
-    return
-  }
-  resetForm()
-  await refreshUsers()
-}
-
-async function remove(): Promise<void> {
-  const email = editingEmail.value
-  if (!email) return
-  if (!window.confirm(`Remove ${email}?`)) return
-
-  try {
-    await deleteAdminUser(email)
-  } catch (err) {
-    console.error(err)
-    showToast(isPermissionDenied(err) ? 'Not authorised.' : "Couldn't remove", true)
-    return
-  }
-  resetForm()
-  await refreshUsers()
+  const brigades = gate.data.value?.brigades ?? []
+  return ids.map((id) => brigades.find((entry) => entry.brigade.brigadeId === id)?.brigade.name ?? id).join(', ')
 }
 </script>
 
 <template>
   <AdminFrame
-    title="User admin"
+    title="Users"
     :up="{ to: '/admin', label: '‹ Admin' }"
-    :loading="gate.loading.value || usersLoading"
+    :loading="gate.loading.value"
     :not-authorised="gate.notAuthorised.value"
-    :error="gate.error.value ?? usersError"
+    :error="gate.error.value"
   >
     <div class="screen active screen-picker">
-      <div
+      <router-link
+        to="/admin/users/new"
+        class="small-btn fit-btn positive new-user"
+      >
+        + New user
+      </router-link>
+
+      <router-link
         v-for="user in users"
         :key="user.email"
+        :to="`/admin/users/${encodeURIComponent(user.email)}`"
         class="appliance-card"
-        @click="startEdit(user)"
       >
         <div class="appliance-card-name">
           {{ user.email }}
@@ -178,121 +54,10 @@ async function remove(): Promise<void> {
             {{ user.displayName ? `${user.displayName} · ` : '' }}{{ roleLabel(user.role) }} · {{ brigadeNames(user.brigadeIds) }}
           </div>
         </div>
-      </div>
-
-      <form @submit.prevent="save">
-        <div class="picker-heading">
-          Email
+        <div class="section-chevron">
+          <span class="chev chev-right" />
         </div>
-        <input
-          v-model="draft.email"
-          type="email"
-          :readonly="editingEmail !== null"
-          class="item-input"
-        >
-
-        <div class="picker-heading">
-          Display name
-        </div>
-        <input
-          v-model="draft.displayName"
-          type="text"
-          class="item-input"
-        >
-
-        <div class="picker-heading">
-          Role
-        </div>
-        <select
-          v-model="draft.role"
-          class="item-select role-select"
-        >
-          <option value="brigadeAdmin">
-            Brigade Admin
-          </option>
-          <option value="vso">
-            VSO
-          </option>
-        </select>
-
-        <div class="picker-heading">
-          Brigade(s)
-        </div>
-        <select
-          v-if="draft.role === 'brigadeAdmin'"
-          v-model="singleBrigadeId"
-          class="item-select brigade-select"
-        >
-          <option value="">
-            Pick a brigade
-          </option>
-          <option
-            v-for="entry in brigades"
-            :key="entry.brigade.brigadeId"
-            :value="entry.brigade.brigadeId"
-          >
-            {{ entry.brigade.name }}
-          </option>
-        </select>
-        <div
-          v-else
-          class="checkbox-list"
-        >
-          <label
-            v-for="entry in brigades"
-            :key="entry.brigade.brigadeId"
-            class="checkbox-row"
-          >
-            <input
-              v-model="draft.brigadeIds"
-              type="checkbox"
-              :value="entry.brigade.brigadeId"
-            >
-            {{ entry.brigade.name }}
-          </label>
-        </div>
-
-        <p
-          v-if="formProblem"
-          class="error-msg"
-        >
-          {{ formProblem }}
-        </p>
-
-        <button
-          type="submit"
-          class="copy-prev-btn"
-        >
-          {{ editingEmail === null ? 'Add' : 'Save' }}
-        </button>
-
-        <div
-          v-if="editingEmail !== null"
-          class="section-bottom-nav"
-        >
-          <button
-            type="button"
-            class="nav-btn section-back-btn"
-            @click="remove"
-          >
-            Remove
-          </button>
-          <button
-            type="button"
-            class="nav-btn section-back-btn"
-            @click="resetForm"
-          >
-            Cancel
-          </button>
-        </div>
-      </form>
-    </div>
-
-    <div
-      id="toast"
-      :class="{ show: toast, error: toast?.isError }"
-    >
-      {{ toast?.text }}
+      </router-link>
     </div>
   </AdminFrame>
 </template>

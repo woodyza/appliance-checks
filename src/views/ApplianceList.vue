@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { type ApplianceSummary, getBrigade, listAppliances } from '../data/checks'
-import { type AdminProfile, canManage, hasHub } from '../domain/adminProfile'
+import { type AdminProfile, canManage, hasBrigadeList } from '../domain/adminProfile'
 import type { Brigade } from '../domain/types'
 import { adminProfile, authReady, currentUser } from '../state/auth'
 
@@ -15,7 +15,7 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const inactive = computed(() => brigade.value !== null && !brigade.value.active)
 const profile = ref<AdminProfile | null>(null)
-const showBrigades = computed(() => profile.value !== null && hasHub(profile.value))
+const showBrigades = computed(() => profile.value !== null && hasBrigadeList(profile.value))
 const showManage = computed(
   () => profile.value !== null && brigade.value !== null && canManage(profile.value, brigade.value.brigadeId),
 )
@@ -53,7 +53,7 @@ onMounted(async () => {
     <header>
       <router-link
         v-if="showBrigades"
-        to="/admin"
+        to="/admin/brigades"
         class="header-back header-up"
       >
         ‹ Brigades

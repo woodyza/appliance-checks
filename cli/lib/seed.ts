@@ -151,6 +151,19 @@ export async function deleteAppliancesAndChecks(db: Firestore, slug: string): Pr
   await db.recursiveDelete(brigadeRef.collection('checks'))
 }
 
+// The brigade specs create brigades through the app under this name prefix (see
+// `tests/e2e/brigadeDetails.spec.ts`), and nothing in the app deletes one.
+export const CREATED_BRIGADE_PREFIX = 'E2E Created'
+
+export async function deleteCreatedBrigades(db: Firestore): Promise<void> {
+  const snapshot = await db
+    .collection('brigades')
+    .where('name', '>=', CREATED_BRIGADE_PREFIX)
+    .where('name', '<', `${CREATED_BRIGADE_PREFIX}\uf8ff`)
+    .get()
+  for (const doc of snapshot.docs) await db.recursiveDelete(doc.ref)
+}
+
 export async function writeApplianceWithoutCheckSheet(
   db: Firestore,
   slug: string,

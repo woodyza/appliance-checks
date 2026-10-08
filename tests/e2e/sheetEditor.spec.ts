@@ -158,8 +158,10 @@ test('drags an Item into another Section', async ({ page }) => {
 
 test('copies a Check Sheet from another appliance', async ({ page }) => {
   await page.goto(`/${SLUG}/admin`)
-  await expect(page.locator('.appliance-row', { hasText: 'E2E D6' })).toContainText('No Check Sheet')
-  await page.locator('.appliance-row', { hasText: 'E2E D6' }).click()
+  const row = page.locator('.appliance-row', { hasText: 'E2E D6' })
+  await expect(row).toContainText('No Check Sheet')
+  await expect(row.locator('.row-checks')).toBeDisabled()
+  await row.locator('.row-edit').click()
   await expect(page).toHaveURL(`/${SLUG}/admin/e2ed6`)
 
   await page.locator('.copy-open').click()

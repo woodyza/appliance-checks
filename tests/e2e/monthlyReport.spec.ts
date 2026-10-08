@@ -11,9 +11,8 @@ test('downloads a Monthly Report', async ({ page }) => {
 
   await signIn(page, SUPERADMIN_EMAIL)
 
+  await page.locator('.appliance-card', { hasText: 'Brigades' }).click()
   await page.locator('.appliance-card', { hasText: 'E2E Test Brigade' }).click()
-  await expect(page).toHaveURL('/e2etst')
-  await page.locator('.header-manage').click()
   await expect(page).toHaveURL('/e2etst/admin')
 
   await expect(page.locator('.appliance-select')).toBeVisible()
@@ -42,15 +41,14 @@ test('not authorised', async ({ page }) => {
   await expect(page.locator('.not-authorised')).toContainText(/UID: [A-Za-z0-9]{20,}/)
 })
 
-test("reaches an inactive brigade's Brigade Admin page from the hub", async ({ page }) => {
+test("reaches an inactive brigade's Brigade Admin page from the brigade list", async ({ page }) => {
   await signIn(page, SUPERADMIN_EMAIL)
 
+  await page.locator('.appliance-card', { hasText: 'Brigades' }).click()
   await page.locator('.appliance-card', { hasText: 'E2E Inactive Brigade (inactive)' }).click()
-  await expect(page).toHaveURL('/e2ezzz')
-  await expect(page.locator('.error-msg')).toHaveText('Checks are disabled for this brigade.')
-  await page.locator('.header-manage').click()
   await expect(page).toHaveURL('/e2ezzz/admin')
   await expect(page.locator('.appliance-select')).toContainText('E2E Z1')
+  await expect(page.locator('.appliance-row', { hasText: 'E2E Z1' }).locator('.row-checks')).toBeDisabled()
 })
 
 test('navigates up from every admin screen, and back in from the landing page', async ({ page }) => {
@@ -59,19 +57,32 @@ test('navigates up from every admin screen, and back in from the landing page', 
 
   // Each up link is checked by its href as well as where it lands, since history-back would land
   // in the same place on this route through the app.
-  await page.locator('.appliance-card', { hasText: 'User admin' }).click()
+  await page.locator('.appliance-card', { hasText: 'Users' }).click()
+  await page.locator('.new-user').click()
+  await expect(page.locator('.header-up')).toHaveAttribute('href', '/admin/users')
+  await page.locator('.header-up', { hasText: '‹ Users' }).click()
+  await expect(page).toHaveURL('/admin/users')
   await expect(page.locator('.header-up')).toHaveAttribute('href', '/admin')
   await page.locator('.header-up', { hasText: '‹ Admin' }).click()
   await expect(page).toHaveURL('/admin')
 
-  await page.locator('.appliance-card', { hasText: 'E2E Test Brigade' }).click()
-  await page.locator('.header-manage').click()
-  await expect(page).toHaveURL('/e2etst/admin')
-  await expect(page.locator('.header-up')).toHaveAttribute('href', '/e2etst')
-  await page.locator('.header-up', { hasText: '‹ Appliances' }).click()
-  await expect(page).toHaveURL('/e2etst')
-  await expect(page.locator('.header-up')).toHaveAttribute('href', '/admin')
+  await page.locator('.appliance-card', { hasText: 'Brigades' }).click()
+  await page.locator('.new-brigade').click()
+  await expect(page.locator('.header-up')).toHaveAttribute('href', '/admin/brigades')
   await page.locator('.header-up', { hasText: '‹ Brigades' }).click()
+  await expect(page).toHaveURL('/admin/brigades')
+
+  await page.locator('.appliance-card', { hasText: 'E2E Test Brigade' }).click()
+  await expect(page).toHaveURL('/e2etst/admin')
+  await expect(page.locator('.header-up')).toHaveAttribute('href', '/admin/brigades')
+  await page.locator('.appliance-row', { hasText: 'E2E 1' }).locator('.row-checks').click()
+  await page.getByRole('button', { name: 'Switch' }).click()
+  await expect(page).toHaveURL('/e2etst')
+  await expect(page.locator('.header-up')).toHaveAttribute('href', '/admin/brigades')
+  await page.locator('.header-up', { hasText: '‹ Brigades' }).click()
+  await expect(page).toHaveURL('/admin/brigades')
+  await expect(page.locator('.header-up')).toHaveAttribute('href', '/admin')
+  await page.locator('.header-up', { hasText: '‹ Admin' }).click()
   await expect(page).toHaveURL('/admin')
 
   await page.goto('/')
@@ -90,7 +101,7 @@ test('a sign-in link switches accounts when someone is already signed in', async
   const otherEmail = `e2e-switch-${Date.now()}@example.com`
 
   await signIn(page, SUPERADMIN_EMAIL)
-  await expect(page.locator('.appliance-card', { hasText: 'User admin' })).toBeVisible()
+  await expect(page.locator('.appliance-card', { hasText: 'Users' })).toBeVisible()
 
   // Opened without the request having been made on this device, so it asks for the email.
   await page.goto(await requestSignInLink(otherEmail))

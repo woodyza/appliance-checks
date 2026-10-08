@@ -549,7 +549,7 @@ header {
   pointer-events: none;
 }
 
-/* Checkbox list (User admin brigade picker) */
+/* Checkbox list (user and brigade forms) */
 .checkbox-list {
   display: flex;
   flex-direction: column;
@@ -771,13 +771,74 @@ header {
   cursor: default;
 }
 .small-btn.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #1a1203;
+  background: var(--yes);
+  border-color: var(--yes);
+  color: #052e14;
   font-weight: 700;
 }
-.add-appliance {
+.small-btn.positive {
+  color: var(--yes);
+  font-weight: 600;
+}
+.small-btn.danger {
+  border-color: var(--no-dim);
+  color: var(--no);
+  font-weight: 600;
+}
+.small-btn.danger:hover:not(:disabled) {
+  border-color: var(--no);
+}
+
+/* A form's submit on the left and, when there is one, its destructive action on the right */
+.form-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+/* Sized to its label rather than stretched across a column; works for links too */
+.fit-btn {
   align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+/* Brigade admin page: Details and Reports stacked beside the wider Appliances panel */
+.brigade-admin {
+  grid-template-areas:
+    'appliances details'
+    'appliances reports';
+}
+.brigade-admin .admin-panel {
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+}
+.details-panel {
+  grid-area: details;
+}
+.appliances-panel {
+  grid-area: appliances;
+}
+.reports-panel {
+  grid-area: reports;
+}
+.panel-title {
+  margin: 0 0 4px;
+  font-size: 1rem;
+  font-weight: 700;
+}
+/* A standalone form page, kept to a readable width on desktop */
+.admin-form {
+  width: 100%;
+  max-width: 36rem;
+}
+.brigade-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .field-error {
@@ -823,7 +884,8 @@ select.cell-input {
 }
 .appliance-row {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) 5rem 5rem minmax(0, 2fr);
+  grid-template-columns: minmax(0, 2fr) 5rem 5rem minmax(0, 2fr) auto;
+  grid-template-areas: 'callsign id active status actions';
   gap: 8px;
   align-items: center;
   padding: 8px 10px;
@@ -833,14 +895,23 @@ select.cell-input {
   color: inherit;
   text-decoration: none;
 }
-.appliance-row:hover {
-  border-color: var(--accent);
-}
 .appliance-row.inactive {
   opacity: 0.6;
 }
 .appliance-row-callsign {
+  grid-area: callsign;
   font-weight: 700;
+}
+.appliance-row-id {
+  grid-area: id;
+}
+.appliance-row-active {
+  grid-area: active;
+}
+.appliance-row-actions {
+  grid-area: actions;
+  display: flex;
+  gap: 6px;
 }
 .appliance-row-id,
 .appliance-row-active,
@@ -849,6 +920,7 @@ select.cell-input {
   font-size: 0.85rem;
 }
 .appliance-row-status {
+  grid-area: status;
   color: var(--accent);
 }
 .appliance-add {
@@ -1227,6 +1299,17 @@ select.cell-input {
   .admin-columns,
   .editor-layout {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .brigade-admin {
+    grid-template-areas: 'details' 'appliances' 'reports';
+  }
+  .appliance-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'callsign callsign actions'
+      'id active actions'
+      'status status actions';
+    row-gap: 2px;
   }
   .editor-sidebar {
     position: static;

@@ -68,6 +68,13 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/brigades/$(slug)).data.brigadeId in adminBrigadeIds());
     }
 
+    // Where and whether a brigade's reports are emailed is for its VSOs and the superadmin, not
+    // its Brigade Admin: the one place the rules read `role`, which only the superadmin writes.
+    function isBrigadeVso(slug) {
+      return isSuperadmin() || (isBrigadeAdmin(slug)
+        && get(/databases/$(database)/documents/adminUsers/$(adminEmail())).data.role == 'vso');
+    }
+
     function applianceDocPath(slug, applianceId) {
       return /databases/$(database)/documents/brigades/$(slug)/appliances/$(applianceId);
     }
@@ -90,13 +97,45 @@ service cloud.firestore {
           && existsAfter(/databases/$(database)/documents/brigades/$(slug)/appliances/$(applianceId)/checkSheetVersions/$(string(after))));
     }
 
+    function validBrigadeFields(data) {
+      return data.keys().hasOnly(['brigadeId', 'name', 'checkDay', 'active'])
+        && data.keys().hasAll(['brigadeId', 'name', 'checkDay', 'active'])
+        && data.brigadeId is string
+        && data.brigadeId.size() >= 1
+        && data.name is string
+        && data.name.size() >= 1
+        && data.name.size() <= 60
+        && data.checkDay is int
+        && data.checkDay >= 1
+        && data.checkDay <= 7
+        && data.active is bool;
+    }
+
     match /brigades/{slug} {
       allow get: if true;
       allow list: if isSuperadmin() || (isAdmin() && resource.data.brigadeId in adminBrigadeIds());
-      allow write: if false;
+
+      allow create: if isSuperadmin()
+        && slug.matches('^[2-9a-hjkmnp-z]{6}$')
+        && validBrigadeFields(request.resource.data)
+        && request.resource.data.active == true;
+
+      // Only the superadmin deactivates a brigade, and nobody deletes one: its Checks would be orphaned.
+      allow update: if isBrigadeAdmin(slug)
+        && validBrigadeFields(request.resource.data)
+        && request.resource.data.brigadeId == resource.data.brigadeId
+        && (request.resource.data.active == resource.data.active || isSuperadmin());
+
+      allow delete: if false;
 
       match /private/settings {
-        allow read, write: if false;
+        allow read: if isBrigadeVso(slug);
+        allow create, update: if isBrigadeVso(slug)
+          && request.resource.data.keys().hasOnly(['reportEmail', 'weeklyEmail'])
+          && (!('reportEmail' in request.resource.data)
+            || (request.resource.data.reportEmail is string && request.resource.data.reportEmail.size() <= 254))
+          && (!('weeklyEmail' in request.resource.data) || request.resource.data.weeklyEmail is bool);
+        allow delete: if false;
       }
 
       match /appliances/{applianceId} {

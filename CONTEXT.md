@@ -18,7 +18,7 @@ The Firebase project owner, who adds and removes Brigade Admins and VSOs, and ca
 A person who administers exactly one brigade, e.g. its Check Sheets and Monthly Reports.
 
 **VSO**:
-Volunteer Support Officer: a member of a regional team who administers their assigned brigades with the same powers as a Brigade Admin. The VSO team covers the region together.
+Volunteer Support Officer: a member of a regional team who administers their assigned brigades with the same powers as a Brigade Admin, and also decides where and whether those brigades' reports are emailed. The VSO team covers the region together.
 
 **Report Email**:
 The address a brigade's reports go to, often a shared VSO team address.

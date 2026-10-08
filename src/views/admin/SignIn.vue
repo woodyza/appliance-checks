@@ -141,7 +141,7 @@ async function confirmEmailAndSignIn(): Promise<void> {
       >
       <button
         type="submit"
-        class="copy-prev-btn"
+        class="small-btn fit-btn positive"
       >
         Send sign-in link
       </button>
@@ -167,7 +167,7 @@ async function confirmEmailAndSignIn(): Promise<void> {
       >
       <button
         type="submit"
-        class="copy-prev-btn"
+        class="small-btn fit-btn positive"
       >
         Continue
       </button>
