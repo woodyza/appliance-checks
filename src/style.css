@@ -96,20 +96,6 @@ header {
   text-transform: uppercase;
 }
 
-.week-selector-wrap {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-}
-.week-selector-label {
-  font-family: 'DM Mono', monospace;
-  font-size: 0.7rem;
-  color: var(--text-dim);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
 .week-selector {
   background: var(--surface2);
   border: 1.5px solid var(--border);
