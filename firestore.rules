@@ -31,6 +31,7 @@ service cloud.firestore {
   }
 
   // `before` is the responses map prior to this write: {} on create, resource.data.responses on update.
+  // No `createdAt`: nothing needs it, and it would make create-vs-update races fail these rules.
   function validCheckWrite(checkId, before) {
     let data = request.resource.data;
     let newKeys = data.responses.keys().removeAll(before.keys());
@@ -129,6 +130,7 @@ service cloud.firestore {
 
       allow delete: if false;
 
+      // A separate doc because the brigade doc is world-readable and rules can't hide individual fields.
       match /private/settings {
         allow read: if isBrigadeVso(slug);
         allow create, update: if isBrigadeVso(slug)

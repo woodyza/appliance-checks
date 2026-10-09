@@ -18,3 +18,4 @@ functions/lib/
 functions/.env*
 .scratchpad/
 docs/plans/
+docs/designs/
