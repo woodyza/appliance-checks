@@ -125,7 +125,7 @@ npm run cli:import-check-sheet -- --project dev --brigade <slug> --appliance 801
 
 Hosting sends `X-Robots-Tag: noindex, nofollow` and serves a `robots.txt` that disallows everything, so well-behaved crawlers don't index the site even if a link leaks.
 
-`make deploy` also deploys the `dailyEmails` function when billing is enabled on the project (esbuild bundles it into the gitignored `functions/lib/` first), and otherwise skips it with a warning. If billing is on but provision's functions step hasn't run (no `GMAIL_APP_PASSWORD` or `MAIL_FROM` secret), it stops before deploying anything and tells you to run `make provision` first. It replaces Hosting content and Firestore rules. `firestore.indexes.json` is the source of truth for indexes, so if any were created in the console the deploy offers to delete them: answer No unless you mean it.
+`make deploy` also deploys the `dailyEmails` function when billing is enabled on the project (esbuild bundles it into the gitignored `functions/lib/` first), and otherwise skips it with a warning. If billing is on but provision's functions step hasn't run (no `GMAIL_APP_PASSWORD` or `MAIL_FROM` secret), it stops before deploying anything and tells you to run `make provision` first. If a functions deploy fails with "Error generating the service identity for pubsub.googleapis.com", re-run it: on `dev` (October 2026) that was transient. It replaces Hosting content and Firestore rules. `firestore.indexes.json` is the source of truth for indexes, so if any were created in the console the deploy offers to delete them: answer No unless you mean it.
 
 Appliances and their Check Sheets can also be added in the admin UI instead (`/<slug>/admin`, signed in as the superadmin), including the Google Sheet import.
 
@@ -187,6 +187,6 @@ This keeps the data, the `*.web.app` URLs and therefore every printed QR code.
 
 **Reprovisioning** (new projects under the new account) means:
 
-- new project ids: remove the `appliance-checks-env` label from the old projects (`gcloud projects update <id> --remove-labels=appliance-checks-env`; `make provision` refuses to label a second project), then run section 3 with `PROJECT_ID` to label the new ones
+- new project ids: remove the `appliance-checks-env` label from the old projects in the console (IAM & Admin → Labels; GA gcloud can't edit project labels, and `make provision` refuses to label a second project), then run section 3 with `PROJECT_ID` to label the new ones
 - a new Hosting domain, so every brigade's QR code gets reprinted, unless a custom domain sits in front of Hosting
 - copying Firestore data across (`gcloud firestore export` / `import` via a Cloud Storage bucket, which needs billing enabled). Brigade Links survive the copy, since the slug is the document id (ADR 0004)

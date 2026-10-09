@@ -22,7 +22,7 @@ export function pickLabelledProject(env: string, ids: string[]): string {
   if (ids.length > 1) {
     throw new Error(
       `More than one project is labelled \`${ENV_LABEL}=${env}\`: ${ids.join(', ')}. ` +
-        `Remove the label from the extras (\`gcloud projects update <id> --remove-labels=${ENV_LABEL}\`).`,
+        'Remove the label from the extras in the console (IAM & Admin → Labels).',
     )
   }
   return ids[0]
