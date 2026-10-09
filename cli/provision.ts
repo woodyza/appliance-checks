@@ -34,6 +34,7 @@ const SERVICES = [
   'firebaseappcheck.googleapis.com',
   'recaptchaenterprise.googleapis.com',
   'identitytoolkit.googleapis.com',
+  'cloudresourcemanager.googleapis.com',
 ]
 const FUNCTIONS_SERVICES = [
   'cloudfunctions.googleapis.com',
@@ -81,13 +82,21 @@ function ensureProject(env: string, projectId: string): void {
   run('npx', ['firebase', 'projects:addfirebase', projectId, '--non-interactive'])
 }
 
-function ensureLabel(env: string, projectId: string, labelled: boolean): void {
+// GA gcloud can't set project labels (only `gcloud alpha` can), so this uses the Resource Manager
+// API. Patching `labels` replaces the whole map, so the existing labels (eg `firebase`) are merged in.
+async function ensureLabel(env: string, projectId: string, labelled: boolean): Promise<void> {
   step(`Project label ${ENV_LABEL}=${env}`)
   if (labelled) {
     console.log('  already set')
     return
   }
-  run('gcloud', ['projects', 'update', projectId, `--update-labels=${ENV_LABEL}=${env}`])
+  const url = `${RESOURCE_MANAGER_API}/projects/${projectId}`
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${gcloudAccessToken()}`, 'x-goog-user-project': projectId },
+  })
+  if (!response.ok) throw new Error(`GET ${url} failed (${String(response.status)}): ${await response.text()}`)
+  const { labels } = (await response.json()) as { labels?: Record<string, string> }
+  await restPatch(projectId, url, { labels: { ...labels, [ENV_LABEL]: env } }, ['labels'])
 }
 
 function ensureServices(projectId: string): void {
@@ -203,6 +212,7 @@ function ensureRecaptchaKey(projectId: string): string {
 
 const APP_CHECK_API = 'https://firebaseappcheck.googleapis.com/v1'
 const IDENTITY_TOOLKIT_API = 'https://identitytoolkit.googleapis.com'
+const RESOURCE_MANAGER_API = 'https://cloudresourcemanager.googleapis.com/v3'
 
 // The App Check provider/enforcement commands in firebase-tools are behind its `appcheckadmin`
 // preview experiment, and no firebase-tools command enables the Auth Email provider, so these
@@ -381,9 +391,9 @@ async function main(): Promise<void> {
   await confirm(`Provision ${env} as ${gcloud}? [y/N] `)
 
   ensureProject(env, projectId)
-  ensureLabel(env, projectId, alreadyLabelled)
-  const billed = billingEnabled(projectId)
   ensureServices(projectId)
+  await ensureLabel(env, projectId, alreadyLabelled)
+  const billed = billingEnabled(projectId)
   ensureFirestore(projectId, region)
   ensureHosting(projectId)
   const appId = ensureWebApp(projectId)

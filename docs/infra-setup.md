@@ -42,8 +42,9 @@ After the first run the id comes from the label, so re-runs are just `make provi
 
 For each project this creates, or checks and skips if it's already there:
 
-- the Google Cloud project with Firebase added, labelled `appliance-checks-env=<env>` straight away, so a first run that stops at the Auth step still leaves the label
-- the Firestore, Firebase Rules, Firebase Hosting, App Check, reCAPTCHA Enterprise, Sheets, API Keys and Identity Toolkit (Auth) APIs
+- the Google Cloud project with Firebase added
+- the Firestore, Firebase Rules, Firebase Hosting, App Check, reCAPTCHA Enterprise, Sheets, API Keys, Identity Toolkit (Auth) and Resource Manager APIs
+- the project label `appliance-checks-env=<env>`, set through the Resource Manager API (GA gcloud can't set project labels), before the Auth step so a first run that stops there still leaves it
 - the `(default)` Firestore database, in `australia-southeast1` unless you pass `REGION=...` (a database's location can't be changed later)
 - the default Hosting site
 - the weekly VSO email's functions setup, only if billing is enabled on the project (otherwise it warns and skips these, see #23):
