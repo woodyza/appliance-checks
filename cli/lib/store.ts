@@ -1,6 +1,7 @@
 import { FieldValue, type Firestore, Timestamp, type Transaction } from 'firebase-admin/firestore'
 import { generateSlug } from '../../src/domain/slug'
 import type { BrigadeSettings, CheckSheetOrigin, CheckSheetVersion, Section } from '../../src/domain/types'
+import { SUPERADMIN_COLLECTION, SUPERADMIN_DOC } from './superadmin'
 
 const ALREADY_EXISTS = 6
 
@@ -106,6 +107,26 @@ export async function updateBrigadeSettings(
 
     transaction.set(settingsRef, fields, { merge: true })
     return { before, after }
+  })
+}
+
+export interface Superadmin {
+  uid: string
+  email: string
+}
+
+export async function setSuperadmin(
+  db: Firestore,
+  superadmin: Superadmin,
+): Promise<{ before: Superadmin | null; after: Superadmin }> {
+  const ref = db.collection(SUPERADMIN_COLLECTION).doc(SUPERADMIN_DOC)
+
+  return db.runTransaction(async (transaction: Transaction) => {
+    const snapshot = await transaction.get(ref)
+    const data = snapshot.data() as Superadmin | undefined
+    const before = data ? { uid: data.uid, email: data.email } : null
+    transaction.set(ref, { ...superadmin, updatedAt: FieldValue.serverTimestamp() })
+    return { before, after: superadmin }
   })
 }
 

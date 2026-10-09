@@ -1,7 +1,8 @@
 import { createInterface } from 'node:readline/promises'
 import { parseArgs } from 'node:util'
-import { readEnvFile } from './lib/envFile'
-import { adminAuth, hostingBaseUrl, readProjectId, resolveTarget } from './lib/target'
+import { DEBUG_TOKEN_SECRET, readSecret } from './lib/secrets'
+import { adminAuth, readProjectId, resolveTarget } from './lib/target'
+import { findWebAppId, WEB_APP_NAME, webSdkConfig } from './lib/webApp'
 
 // Checks whether a password sign-up made before an admin's first email-link sign-in still works
 // afterwards on `dev` (ADR 0005's accepted pre-hijacking risk). Creates a throwaway Auth user for
@@ -25,13 +26,17 @@ interface AuthResponse {
 }
 
 function devConfig(): DevConfig {
-  const env = readEnvFile('.env.dev')
-  if (env === null) throw new Error('.env.dev not found: run `make provision ENV=dev` first.')
-  const { VITE_FIREBASE_API_KEY: apiKey, VITE_FIREBASE_APP_ID: appId, E2E_APPCHECK_DEBUG_TOKEN: debugToken } = env
-  if (!apiKey || !appId || !debugToken) {
-    throw new Error('.env.dev needs VITE_FIREBASE_API_KEY, VITE_FIREBASE_APP_ID and E2E_APPCHECK_DEBUG_TOKEN.')
+  const projectId = readProjectId('dev')
+  const webAppId = findWebAppId(projectId)
+  if (!webAppId) throw new Error(`No web app "${WEB_APP_NAME}" on ${projectId}: run \`make provision ENV=dev\`.`)
+  const { apiKey, appId } = webSdkConfig(projectId, webAppId)
+  const debugToken = readSecret(projectId, DEBUG_TOKEN_SECRET)
+  if (debugToken === null) {
+    throw new Error(
+      `No ${DEBUG_TOKEN_SECRET} secret on ${projectId}: e2e against dev needs billing on dev; run \`make provision ENV=dev\`.`,
+    )
   }
-  return { apiKey, appId, debugToken, siteUrl: hostingBaseUrl('dev') }
+  return { apiKey, appId, debugToken, siteUrl: `https://${projectId}.web.app` }
 }
 
 async function authCall(

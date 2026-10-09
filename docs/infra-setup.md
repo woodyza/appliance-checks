@@ -19,9 +19,9 @@ gcloud auth login                                       # pick the account for t
 gcloud config configurations activate default           # to switch back later
 ```
 
-For the Firebase CLI, run `npx firebase login` (or `npx firebase login:use <email>`) inside the repo: `login:use` pins the account for this directory only. `make provision` refuses to run if the gcloud and Firebase CLI accounts differ, and asks for confirmation before changing anything.
+For the Firebase CLI, run `npx firebase login` (or `npx firebase login:use <email>`) inside the repo: `login:use` pins the account for this directory only. `make provision` and `make deploy` refuse to run if the gcloud and Firebase CLI accounts differ, and `make provision` asks for confirmation before changing anything. Nothing about the environments is kept on your machine: the commands find the projects by label and look up everything else from GCP each run, so any machine logged in as an account with access to the projects works.
 
-The brigade and import CLI tools use Application Default Credentials instead: `gcloud auth application-default login` as the same account. ADC is machine-wide, not per gcloud configuration, so re-run it when switching; the tools show the ADC account and ask before touching `dev` or `prod`.
+The brigade and import CLI tools read and write Firestore with Application Default Credentials: `gcloud auth application-default login` as the same account. They still find the project through the gcloud login, so they need both. ADC is machine-wide, not per gcloud configuration, so re-run it when switching; the tools show the ADC account and ask before touching `dev` or `prod`.
 
 ## 2. One-off manual steps
 
@@ -31,49 +31,64 @@ Each new project also needs Authentication started once in the console. The API 
 
 ## 3. Provision each environment
 
-Project ids are globally unique and permanent, and the site is served at `<project-id>.web.app`, so the id is effectively the site's address. For prod, add a random suffix so it can't be guessed (e.g. `appliance-checks-` plus 6 random letters and digits, such as the output of `LC_ALL=C tr -dc a-z0-9 </dev/urandom | head -c6`; `make provision` warns if it's missing), and don't publish it: this repo is public, so ids stay out of git. `.firebaserc` is gitignored; keep a note of the ids somewhere private. `dev` is on the Blaze plan (billing linked), since deployed functions need it and the weekly email's done-when runs there. `prod` stays on the free Spark plan, so abuse can only take it offline, never cost money, until the spending cap and the review of anonymous access in #23 are sorted. Link billing to a project in the console; `make provision` only checks for it.
+Project ids are globally unique and permanent, and the site is served at `<project-id>.web.app`, so the id is effectively the site's address. For prod, add a random suffix so it can't be guessed (e.g. `appliance-checks-` plus 6 random letters and digits, such as the output of `LC_ALL=C tr -dc a-z0-9 </dev/urandom | head -c6`; `make provision` warns if it's missing), and don't publish it: this repo is public, so ids stay out of git. The ids live in GCP as a project label (`appliance-checks-env=dev` or `prod`), which `make provision` adds. Every `dev`/`prod` command lists the active projects with that label, as the gcloud account, and stops if there are none or more than one. `dev` is on the Blaze plan (billing linked), since deployed functions need it and the weekly email's done-when runs there. `prod` stays on the free Spark plan, so abuse can only take it offline, never cost money, until the spending cap and the review of anonymous access in #23 are sorted. Link billing to a project in the console; `make provision` only checks for it.
 
 ```bash
 make provision ENV=dev PROJECT_ID=<dev project id>
 make provision ENV=prod PROJECT_ID=<prod project id>
 ```
 
-After the first run the id comes from the `.firebaserc` alias, so re-runs are just `make provision ENV=dev`.
+After the first run the id comes from the label, so re-runs are just `make provision ENV=dev`. If `PROJECT_ID` is given and a different project already has the label, provision stops.
 
 For each project this creates, or checks and skips if it's already there:
 
-- the Google Cloud project with Firebase added
+- the Google Cloud project with Firebase added, labelled `appliance-checks-env=<env>` straight away, so a first run that stops at the Auth step still leaves the label
 - the Firestore, Firebase Rules, Firebase Hosting, App Check, reCAPTCHA Enterprise, Sheets, API Keys and Identity Toolkit (Auth) APIs
 - the `(default)` Firestore database, in `australia-southeast1` unless you pass `REGION=...` (a database's location can't be changed later)
 - the default Hosting site
 - the weekly VSO email's functions setup, only if billing is enabled on the project (otherwise it warns and skips these, see #23):
   - the Cloud Functions, Cloud Build, Artifact Registry, Cloud Run, Eventarc, Cloud Scheduler and Secret Manager APIs
   - the `GMAIL_APP_PASSWORD` secret, prompted for with hidden input if it doesn't exist yet (an existing one is left alone). It's an app password for the dedicated Gmail account. Turn on [2-Step Verification](https://myaccount.google.com/signinoptions/twosv) first, then create one at [App passwords](https://myaccount.google.com/apppasswords) (the Security page no longer links to it). Google shows it in four groups of four; paste it without the spaces. To check or replace it later, it's in [Secret Manager](https://console.cloud.google.com/security/secret-manager) for the project
-  - `MAIL_FROM`, the sending Gmail address, prompted for if it's missing from `functions/.env.<env>` (gitignored, so the address stays out of this public repo)
+  - the `MAIL_FROM` secret, the sending Gmail address, prompted for (and checked) if it doesn't exist yet. It's a secret rather than a config value so the address stays out of this public repo
   - an Artifact Registry cleanup policy for function images (`firebase functions:artifacts:setpolicy`, 1 day). Before the first functions deploy the repository doesn't exist, so this does nothing until a re-run; the first `make deploy` offers to set one itself
-- a Firebase Web app (`appliance-checks-web`) and its SDK config
+- a Firebase Web app (`appliance-checks-web`)
 - a reCAPTCHA Enterprise score key (`appliance-checks-web`, restricted to `<project>.web.app` and `<project>.firebaseapp.com`), registered as the app's App Check provider at a minimum score of 0.3 with a 1h token TTL
 - Firestore App Check enforcement, set to `enforced`
 - the Auth Email link (passwordless) sign-in provider, via `PATCH identitytoolkit.googleapis.com/admin/v2/projects/{p}/config` (no firebase-tools command enables it). On a new project this fails with `CONFIGURATION_NOT_FOUND` until Authentication has been started in the console (see section 2).
 - Auth App Check enforcement, set to `enforced`. It protects the call that sends sign-in emails, so a script can't use up the day's quota. It's best-effort: if it fails, provisioning warns and carries on. On `dev` it went through on Spark, without Identity Platform.
-- `dev` only: an App Check debug token (display name `appliance-checks-e2e`) for `make e2e ENV=dev`, reusing `E2E_APPCHECK_DEBUG_TOKEN` from an existing `.env.dev` if there is one
+- `dev` only: an App Check debug token (display name `appliance-checks-e2e`) for `make e2e ENV=dev`. It needs billing: provision enables Secret Manager, then re-registers the `E2E_APPCHECK_DEBUG_TOKEN` secret's value with App Check, or mints one, stores it in that secret and registers it. The token is never printed. Without billing it warns and skips this, and `make e2e ENV=dev` then stops until provision has run on a billed `dev`
 - a browser Sheets API key named `appliance-checks-sheets-web`, restricted to the Sheets API and to the HTTP referrers `https://<project>.web.app/*` and `https://<project>.firebaseapp.com/*` (plus `http://localhost:5173/*` on `dev`), for importing a Google Sheet in the admin UI. It ends up in the bundle by design; the restrictions are its protection. A re-run doesn't update an existing key's referrers (#20). On `dev` (October 2026) importing on the deployed site worked with it
-- `.env.<env>` (the Firebase web config, reCAPTCHA site key and browser Sheets key as `VITE_SHEETS_API_KEY`; gitignored, like `.firebaserc` — the config contains the project id). An existing `SUPERADMIN_UID` is kept across re-runs, the same as the debug token.
 - a Sheets API key named `appliance-checks-sheets-cli`, restricted to the Sheets API, for the CLI import
-- the environment's alias in `.firebaserc` (gitignored; on a new machine, re-running `make provision` recreates it)
 
-Local dev (the emulator) has no browser Sheets key by default, so an import in the admin UI fails with Google's "API key not valid" error. To try one, copy `VITE_SHEETS_API_KEY` from `.env.dev` into a gitignored `.env.development.local` (`dev`'s key allows `http://localhost:5173`).
+Nothing is written to local files. The web config, reCAPTCHA site key and browser Sheets key are looked up by `make deploy` (and `cli:check-prehijack`) each run; if one is missing, they stop and say to run `make provision`.
+
+Local dev (the emulator) has no browser Sheets key by default, so an import in the admin UI fails with Google's "API key not valid" error. To try one, put the `dev` key in a gitignored `.env.development.local` as `VITE_SHEETS_API_KEY=<key>` (`dev`'s key allows `http://localhost:5173`):
+
+```bash
+gcloud services api-keys get-key-string $(gcloud services api-keys list --project <dev project id> --filter='displayName=appliance-checks-sheets-web' --format='value(name)') --format='value(keyString)'
+```
 
 It's safe to re-run, e.g. after a step failed or a project was partly set up in the console. The key itself isn't printed; the script ends with the command to load it into your shell as `SHEETS_API_KEY`.
 
-### Superadmin UID bootstrap
+### New environment
 
-The superadmin's UID isn't known until they've signed in once, so it can't be provisioned up front:
+1. `make provision ENV=<env> PROJECT_ID=<id>`. It creates the project, then stops at the Auth step (`CONFIGURATION_NOT_FOUND`).
+2. In the console, click "Get started" under Authentication, and link billing if wanted.
+3. `make provision ENV=<env>` again. With billing on, this also does the functions setup and the `dev` debug token.
+4. `make deploy ENV=<env>`, sign in once at `/admin/sign-in`, run `cli:set-superadmin` (below), then deploy again.
 
-1. `make deploy ENV=<env>` with no `SUPERADMIN_UID` in `.env.<env>` yet: `firestore.rules` deploys trusting no one (a warning explains this).
+Linking billing later (eg prod after #23) needs another provision run. Deploy already enforces that: with billing on and the secrets missing, it stops with "run `make provision`".
+
+### Superadmin bootstrap
+
+The superadmin's UID isn't known until they've signed in once, so it can't be provisioned up front. It's stored in the Firestore doc `deployConfig/superadmin` (`{ uid, email }`), which works on Spark as well as Blaze and which clients can't read or write (no rule matches it). `make deploy` reads it with a gcloud access token, and puts it in the rules and the build.
+
+1. `make deploy ENV=<env>` with no superadmin yet: `firestore.rules` deploys trusting no one (a warning explains this).
 2. Sign in at `/admin/sign-in` with the superadmin's real email.
-3. The "Not authorised" screen shows the signed-in UID. Copy it into `.env.<env>` as `SUPERADMIN_UID=<uid>`.
+3. `npm run cli:set-superadmin -- --project <env> --email <addr>`. It looks the UID up in Auth, asks for confirmation (ADC account, as the other brigade tools do), writes the doc and prints the value before and after. It only accepts `dev` or `prod`.
 4. `make deploy ENV=<env>` again to pick it up.
+
+If the doc can't be read for any reason other than not existing, deploy stops rather than deploying a ruleset that locks the superadmin out.
 
 Firebase Auth's email-link sign-in is capped at 5 emails/day project-wide on the Spark plan (25,000 on Blaze). `dev` is on Blaze now, but `prod` stays on Spark until #23, so the `prod` bootstrap and any testing against a real inbox there should be mindful of that limit.
 
@@ -109,7 +124,7 @@ npm run cli:import-check-sheet -- --project dev --brigade <slug> --appliance 801
 
 Hosting sends `X-Robots-Tag: noindex, nofollow` and serves a `robots.txt` that disallows everything, so well-behaved crawlers don't index the site even if a link leaks.
 
-`make deploy` also deploys the `dailyEmails` function when billing is enabled on the project (esbuild bundles it into the gitignored `functions/lib/` first), and otherwise skips it with a warning. If billing is on but provision's functions step hasn't run (no `GMAIL_APP_PASSWORD` secret, or no `MAIL_FROM` in `functions/.env.<env>`), it stops before deploying anything and tells you to run `make provision` first. It replaces Hosting content and Firestore rules. `firestore.indexes.json` is the source of truth for indexes, so if any were created in the console the deploy offers to delete them: answer No unless you mean it.
+`make deploy` also deploys the `dailyEmails` function when billing is enabled on the project (esbuild bundles it into the gitignored `functions/lib/` first), and otherwise skips it with a warning. If billing is on but provision's functions step hasn't run (no `GMAIL_APP_PASSWORD` or `MAIL_FROM` secret), it stops before deploying anything and tells you to run `make provision` first. It replaces Hosting content and Firestore rules. `firestore.indexes.json` is the source of truth for indexes, so if any were created in the console the deploy offers to delete them: answer No unless you mean it.
 
 Appliances and their Check Sheets can also be added in the admin UI instead (`/<slug>/admin`, signed in as the superadmin), including the Google Sheet import.
 
@@ -134,7 +149,7 @@ To run the job by hand:
 
 ```bash
 gcloud scheduler jobs run firebase-schedule-dailyEmails-australia-southeast1 --location australia-southeast1 --project <project id>
-npx firebase functions:log --only dailyEmails --project <env>
+npx firebase functions:log --only dailyEmails --project <project id>
 ```
 
 The logs list each email sent, each brigade skipped (and why) and each failure. The function never retries, so a failed weekly send isn't repeated until the next Check Day.
@@ -151,7 +166,7 @@ It runs in the same job, so the run and log commands above cover it. Its log lin
 make e2e ENV=dev
 ```
 
-Seeds the `e2etst` brigade against `dev` (Admin SDK, behind the account guard), then runs the Playwright specs against `https://<dev project id>.web.app` with the App Check debug token from `.env.dev` injected via `addInitScript`. Requires `make deploy ENV=dev` to have run first, and the enforcement wait above to have passed.
+Seeds the `e2etst` brigade against `dev` (Admin SDK, behind the account guard), then runs the Playwright specs against `https://<dev project id>.web.app` with the App Check debug token injected via `addInitScript`. The make target looks up the site URL and the `E2E_APPCHECK_DEBUG_TOKEN` secret once, up front, and hands them to Playwright as `E2E_BASE_URL` and `E2E_APPCHECK_DEBUG_TOKEN`; Playwright never calls gcloud. It needs billing on `dev` (the token lives in Secret Manager) and stops with a pointer to `make provision ENV=dev` if the secret's missing. Requires `make deploy ENV=dev` to have run first, and the enforcement wait above to have passed.
 
 What the first `dev` run showed (September 2026):
 
@@ -171,6 +186,6 @@ This keeps the data, the `*.web.app` URLs and therefore every printed QR code.
 
 **Reprovisioning** (new projects under the new account) means:
 
-- new project ids: edit the aliases in `.firebaserc` by hand (`make provision` won't repoint an existing alias), then run section 3
+- new project ids: remove the `appliance-checks-env` label from the old projects (`gcloud projects update <id> --remove-labels=appliance-checks-env`; `make provision` refuses to label a second project), then run section 3 with `PROJECT_ID` to label the new ones
 - a new Hosting domain, so every brigade's QR code gets reprinted, unless a custom domain sits in front of Hosting
 - copying Firestore data across (`gcloud firestore export` / `import` via a Cloud Storage bucket, which needs billing enabled). Brigade Links survive the copy, since the slug is the document id (ADR 0004)

@@ -30,7 +30,7 @@ dev:
 		--kill-others-on-fail "npm run emulators" "npm run dev:seed" "npm run dev"
 
 # make provision ENV=dev|prod [PROJECT_ID=<id>] [REGION=<region>]; PROJECT_ID defaults to the
-# .firebaserc alias for ENV, so it's only needed the first time. See docs/infra-setup.md.
+# project labelled appliance-checks-env=ENV, so it's only needed the first time. See docs/infra-setup.md.
 provision:
 	npx tsx cli/provision.ts --env $(ENV) $(if $(PROJECT_ID),--project-id $(PROJECT_ID)) $(if $(REGION),--region $(REGION))
 
@@ -40,11 +40,11 @@ deploy:
 
 # make e2e [ENV=dev] — Playwright, kept out of `check`. Default (no ENV) runs against the Firestore
 # emulator and Vite: a running `make dev` if there is one (the e2e seed only touches its own brigade),
-# otherwise a throwaway emulator. ENV=dev seeds and runs against the deployed dev site.
+# otherwise a throwaway emulator. ENV=dev looks up dev's URL and debug token, seeds and runs against
+# the deployed dev site.
 e2e:
 	@if [ "$(ENV)" = "dev" ]; then \
-		npm run e2e:seed -- --project dev && \
-		E2E_ENV=dev npx playwright test; \
+		npx tsx cli/e2e-dev.ts; \
 	elif curl -s -o /dev/null http://127.0.0.1:8080; then \
 		npm run e2e:seed -- --project emulator && npx playwright test; \
 	else \

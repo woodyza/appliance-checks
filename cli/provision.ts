@@ -1,15 +1,28 @@
 import { randomUUID } from 'node:crypto'
-import { writeFileSync } from 'node:fs'
 import { parseArgs } from 'node:util'
 import { isValidEmail } from '../src/domain/adminUser'
-import { assertNoFirebaseToken, firebaseCliAccount, gcloudAccount } from './lib/accounts'
+import {
+  assertAccountsMatch,
+  assertNoFirebaseToken,
+  firebaseCliAccount,
+  gcloudAccessToken,
+  gcloudAccount,
+} from './lib/accounts'
 import { billingEnabled } from './lib/billing'
-import { readEnvFile, renderEnvFile } from './lib/envFile'
-import { type Firebaserc, readFirebaserc, withAlias, writeFirebaserc } from './lib/firebaserc'
-import { functionsEnvPath, GMAIL_SECRET_NAME, gmailSecretExists } from './lib/functions'
-import { hasRandomSuffix } from './lib/projectId'
+import { GMAIL_SECRET_NAME, MAIL_FROM_SECRET_NAME } from './lib/functions'
+import { ENV_LABEL, hasRandomSuffix, labelledProjectIds, provisionProjectId } from './lib/projectId'
 import { askText, confirm } from './lib/prompt'
+import { createSecret, DEBUG_TOKEN_SECRET, readSecret, secretExists } from './lib/secrets'
 import { capture, run } from './lib/shell'
+import {
+  apiKeyName,
+  findRecaptchaSiteKey,
+  findWebAppId,
+  RECAPTCHA_KEY_NAME,
+  SHEETS_WEB_KEY_NAME,
+  siteKeyFromName,
+  WEB_APP_NAME,
+} from './lib/webApp'
 
 const DEFAULT_REGION = 'australia-southeast1'
 const SERVICES = [
@@ -32,10 +45,7 @@ const FUNCTIONS_SERVICES = [
   'secretmanager.googleapis.com',
 ]
 const SHEETS_KEY_NAME = 'appliance-checks-sheets-cli'
-const SHEETS_WEB_KEY_NAME = 'appliance-checks-sheets-web'
 const VITE_DEV_ORIGIN = 'http://localhost:5173'
-const WEB_APP_NAME = 'appliance-checks-web'
-const RECAPTCHA_KEY_NAME = 'appliance-checks-web'
 const RECAPTCHA_MIN_SCORE = 0.3
 const PROJECT_ID_PATTERN = /^[a-z][a-z0-9-]{4,28}[a-z0-9]$/
 
@@ -69,6 +79,15 @@ function ensureProject(env: string, projectId: string): void {
     return
   }
   run('npx', ['firebase', 'projects:addfirebase', projectId, '--non-interactive'])
+}
+
+function ensureLabel(env: string, projectId: string, labelled: boolean): void {
+  step(`Project label ${ENV_LABEL}=${env}`)
+  if (labelled) {
+    console.log('  already set')
+    return
+  }
+  run('gcloud', ['projects', 'update', projectId, `--update-labels=${ENV_LABEL}=${env}`])
 }
 
 function ensureServices(projectId: string): void {
@@ -110,23 +129,6 @@ function ensureHosting(projectId: string): void {
   }
 }
 
-function apiKeyName(projectId: string, displayName: string): string | null {
-  const listed = capture('gcloud', [
-    'services', 'api-keys', 'list', `--project=${projectId}`,
-    `--filter=displayName="${displayName}"`, '--format=value(displayName,name)',
-  ])
-  if (!listed.ok) throw new Error(`Could not list API keys: ${listed.stderr}`)
-  const names = listed.stdout
-    .split('\n')
-    .map((line) => line.split('\t'))
-    .filter(([name]) => name === displayName)
-    .map(([, name]) => name)
-  if (names.length > 1) {
-    throw new Error(`Found ${names.length} API keys named "${displayName}"; delete the extras in the console.`)
-  }
-  return names[0] ?? null
-}
-
 function ensureSheetsKey(projectId: string): string {
   step(`Sheets API key "${SHEETS_KEY_NAME}"`)
   const existing = apiKeyName(projectId, SHEETS_KEY_NAME)
@@ -147,44 +149,28 @@ function ensureSheetsKey(projectId: string): string {
 
 // The browser import's key ends up in the bundle, so it's restricted to the Sheets API and to this
 // site's origins (plus the Vite dev server on `dev`).
-function ensureSheetsWebKey(env: string, projectId: string): string {
+function ensureSheetsWebKey(env: string, projectId: string): void {
   step(`Browser Sheets API key "${SHEETS_WEB_KEY_NAME}"`)
-  let keyName = apiKeyName(projectId, SHEETS_WEB_KEY_NAME)
-  if (keyName) {
+  if (apiKeyName(projectId, SHEETS_WEB_KEY_NAME)) {
     console.log('  already exists')
-  } else {
-    const referrers = [`https://${projectId}.web.app/*`, `https://${projectId}.firebaseapp.com/*`]
-    if (env === 'dev') referrers.push(`${VITE_DEV_ORIGIN}/*`)
-    const creating = capture('gcloud', [
-      'services', 'api-keys', 'create', `--project=${projectId}`,
-      `--display-name=${SHEETS_WEB_KEY_NAME}`, '--api-target=service=sheets.googleapis.com',
-      `--allowed-referrers=${referrers.join(',')}`,
-    ])
-    if (!creating.ok) throw new Error(`Could not create the browser Sheets API key: ${creating.stderr}`)
-    keyName = apiKeyName(projectId, SHEETS_WEB_KEY_NAME)
-    if (!keyName) throw new Error('Created the browser Sheets API key but could not find it afterwards.')
+    return
   }
-  const keyString = capture('gcloud', [
-    'services', 'api-keys', 'get-key-string', keyName, `--project=${projectId}`, '--format=value(keyString)',
+  const referrers = [`https://${projectId}.web.app/*`, `https://${projectId}.firebaseapp.com/*`]
+  if (env === 'dev') referrers.push(`${VITE_DEV_ORIGIN}/*`)
+  const creating = capture('gcloud', [
+    'services', 'api-keys', 'create', `--project=${projectId}`,
+    `--display-name=${SHEETS_WEB_KEY_NAME}`, '--api-target=service=sheets.googleapis.com',
+    `--allowed-referrers=${referrers.join(',')}`,
   ])
-  if (!keyString.ok || !keyString.stdout) throw new Error(`Could not read the browser Sheets API key: ${keyString.stderr}`)
-  return keyString.stdout
-}
-
-interface FirebaseApp {
-  appId: string
-  displayName?: string
+  if (!creating.ok) throw new Error(`Could not create the browser Sheets API key: ${creating.stderr}`)
 }
 
 function ensureWebApp(projectId: string): string {
   step(`Web app "${WEB_APP_NAME}"`)
-  const listed = capture('npx', ['firebase', 'apps:list', 'WEB', '--project', projectId, '--non-interactive', '--json'])
-  if (!listed.ok) throw new Error(`Could not list Firebase web apps: ${listed.stderr || listed.stdout}`)
-  const apps = (JSON.parse(listed.stdout) as { result?: FirebaseApp[] }).result ?? []
-  const existing = apps.find((app) => app.displayName === WEB_APP_NAME)
+  const existing = findWebAppId(projectId)
   if (existing) {
-    console.log(`  already exists: ${existing.appId}`)
-    return existing.appId
+    console.log(`  already exists: ${existing}`)
+    return existing
   }
 
   const created = capture('npx', [
@@ -197,41 +183,12 @@ function ensureWebApp(projectId: string): string {
   return appId
 }
 
-interface WebSdkConfig {
-  projectId: string
-  appId: string
-  apiKey: string
-  authDomain: string
-}
-
-function webConfig(projectId: string, appId: string): WebSdkConfig {
-  step('Web app SDK config')
-  const result = capture('npx', [
-    'firebase', 'apps:sdkconfig', 'WEB', appId,
-    '--project', projectId, '--non-interactive', '--json',
-  ])
-  if (!result.ok) throw new Error(`Could not fetch the web app SDK config: ${result.stderr || result.stdout}`)
-  const sdkConfig = (JSON.parse(result.stdout) as { result?: { sdkConfig?: WebSdkConfig } }).result?.sdkConfig
-  if (!sdkConfig) throw new Error('Could not find sdkConfig in the apps:sdkconfig output.')
-  return sdkConfig
-}
-
-interface RecaptchaKey {
-  name: string
-  displayName?: string
-}
-
 function ensureRecaptchaKey(projectId: string): string {
   step(`reCAPTCHA Enterprise key "${RECAPTCHA_KEY_NAME}"`)
-  const listed = capture('gcloud', ['recaptcha', 'keys', 'list', `--project=${projectId}`, '--format=json'])
-  if (!listed.ok) throw new Error(`Could not list reCAPTCHA Enterprise keys: ${listed.stderr}`)
-  const keys = JSON.parse(listed.stdout) as RecaptchaKey[]
-  const existing = keys.find((key) => key.displayName === RECAPTCHA_KEY_NAME)
+  const existing = findRecaptchaSiteKey(projectId)
   if (existing) {
-    const siteKey = existing.name.split('/').pop()
-    if (!siteKey) throw new Error(`Could not parse a site key out of "${existing.name}".`)
-    console.log(`  already exists: ${siteKey}`)
-    return siteKey
+    console.log(`  already exists: ${existing}`)
+    return existing
   }
 
   const domains = `${projectId}.web.app,${projectId}.firebaseapp.com`
@@ -241,10 +198,7 @@ function ensureRecaptchaKey(projectId: string): string {
     '--web', `--domains=${domains}`, '--integration-type=score', '--format=json',
   ])
   if (!created.ok) throw new Error(`Could not create the reCAPTCHA Enterprise key: ${created.stderr}`)
-  const name = (JSON.parse(created.stdout) as RecaptchaKey).name
-  const siteKey = name.split('/').pop()
-  if (!siteKey) throw new Error(`Could not parse a site key out of "${name}".`)
-  return siteKey
+  return siteKeyFromName((JSON.parse(created.stdout) as { name: string }).name)
 }
 
 const APP_CHECK_API = 'https://firebaseappcheck.googleapis.com/v1'
@@ -254,13 +208,11 @@ const IDENTITY_TOOLKIT_API = 'https://identitytoolkit.googleapis.com'
 // preview experiment, and no firebase-tools command enables the Auth Email provider, so these
 // call the REST APIs directly, as firebase-tools itself does for App Check.
 async function restPatch(projectId: string, url: string, body: object, updateMask: string[]): Promise<void> {
-  const token = capture('gcloud', ['auth', 'print-access-token'])
-  if (!token.ok) throw new Error(`Could not get a gcloud access token: ${token.stderr}`)
   const patchUrl = `${url}?updateMask=${updateMask.join(',')}`
   const response = await fetch(patchUrl, {
     method: 'PATCH',
     headers: {
-      Authorization: `Bearer ${token.stdout}`,
+      Authorization: `Bearer ${gcloudAccessToken()}`,
       'Content-Type': 'application/json',
       'x-goog-user-project': projectId,
     },
@@ -332,11 +284,20 @@ async function enforceAuth(projectId: string, number: string): Promise<void> {
   }
 }
 
-function ensureDebugToken(env: string, projectId: string, appId: string): string | null {
-  if (env !== 'dev') return null
+function ensureDebugToken(env: string, projectId: string, appId: string, billed: boolean): void {
+  if (env !== 'dev') return
   step('App Check debug token (dev only, for e2e)')
-  const existing = readEnvFile(`.env.${env}`)
-  const token = existing?.E2E_APPCHECK_DEBUG_TOKEN ?? randomUUID()
+  if (!billed) {
+    console.log(`  warning: billing isn't enabled on ${projectId}, so \`make e2e ENV=dev\` can't run; skipping`)
+    return
+  }
+  run('gcloud', ['services', 'enable', 'secretmanager.googleapis.com', `--project=${projectId}`])
+  // Stored before it's registered, so a failed registration is retried with the same value.
+  let token = readSecret(projectId, DEBUG_TOKEN_SECRET)
+  if (token === null) {
+    token = randomUUID()
+    createSecret(projectId, DEBUG_TOKEN_SECRET, token)
+  }
   // --json (captured, not streamed to the terminal) so the token itself never lands in scrollback.
   const created = capture('npx', [
     'firebase', 'appcheck:debugtokens:create', token,
@@ -344,37 +305,12 @@ function ensureDebugToken(env: string, projectId: string, appId: string): string
     '--project', projectId, '--non-interactive', '--json',
   ])
   if (!created.ok) throw new Error(`Could not create the App Check debug token: ${created.stderr}`)
-  console.log('  created (kept out of scrollback; written to .env.dev)')
-  return token
+  console.log(`  registered (kept out of scrollback; stored in Secret Manager as ${DEBUG_TOKEN_SECRET})`)
 }
 
-function writeEnvValues(
-  env: string,
-  config: WebSdkConfig,
-  siteKey: string,
-  sheetsWebKey: string,
-  debugToken: string | null,
-): void {
-  step(`.env.${env}`)
-  const values: Record<string, string> = {
-    VITE_USE_EMULATOR: 'false',
-    VITE_FIREBASE_API_KEY: config.apiKey,
-    VITE_FIREBASE_AUTH_DOMAIN: config.authDomain,
-    VITE_FIREBASE_PROJECT_ID: config.projectId,
-    VITE_FIREBASE_APP_ID: config.appId,
-    VITE_RECAPTCHA_SITE_KEY: siteKey,
-    VITE_SHEETS_API_KEY: sheetsWebKey,
-  }
-  if (debugToken) values.E2E_APPCHECK_DEBUG_TOKEN = debugToken
-  const existingSuperadminUid = readEnvFile(`.env.${env}`)?.SUPERADMIN_UID
-  if (existingSuperadminUid) values.SUPERADMIN_UID = existingSuperadminUid
-  writeFileSync(`.env.${env}`, renderEnvFile(values))
-  console.log('  written (it is gitignored)')
-}
-
-async function ensureFunctions(env: string, projectId: string, region: string): Promise<void> {
+async function ensureFunctions(projectId: string, region: string, billed: boolean): Promise<void> {
   step('Cloud Functions (weekly VSO email)')
-  if (!billingEnabled(projectId)) {
+  if (!billed) {
     console.log(`  warning: billing isn't enabled on ${projectId}, so functions can't deploy; skipping (see #23)`)
     return
   }
@@ -382,35 +318,28 @@ async function ensureFunctions(env: string, projectId: string, region: string): 
   console.log(`  APIs: ${FUNCTIONS_SERVICES.join(', ')}`)
   run('gcloud', ['services', 'enable', ...FUNCTIONS_SERVICES, `--project=${projectId}`])
 
-  if (gmailSecretExists(projectId)) {
+  if (secretExists(projectId, GMAIL_SECRET_NAME)) {
     console.log(`  secret ${GMAIL_SECRET_NAME} already exists`)
   } else {
     console.log(`  creating secret ${GMAIL_SECRET_NAME}: paste the Gmail app password when prompted`)
     run('npx', ['firebase', 'functions:secrets:set', GMAIL_SECRET_NAME, '--project', projectId])
   }
 
-  const envPath = functionsEnvPath(env)
-  const envValues = readEnvFile(envPath) ?? {}
-  if (envValues.MAIL_FROM) {
-    console.log(`  MAIL_FROM already set in ${envPath}`)
+  if (secretExists(projectId, MAIL_FROM_SECRET_NAME)) {
+    console.log(`  secret ${MAIL_FROM_SECRET_NAME} already exists`)
   } else {
     const mailFrom = (await askText('  MAIL_FROM (the Gmail address the email is sent from): ')).toLowerCase()
     if (!isValidEmail(mailFrom)) throw new Error(`"${mailFrom}" is not a valid email address.`)
-    writeFileSync(envPath, renderEnvFile({ ...envValues, MAIL_FROM: mailFrom }))
-    console.log(`  written to ${envPath} (it is gitignored)`)
+    const created = capture(
+      'npx',
+      ['firebase', 'functions:secrets:set', MAIL_FROM_SECRET_NAME, '--data-file', '-', '--project', projectId, '--non-interactive'],
+      { input: mailFrom },
+    )
+    if (!created.ok) throw new Error(`Could not create the ${MAIL_FROM_SECRET_NAME} secret: ${created.stderr || created.stdout}`)
+    console.log(`  secret ${MAIL_FROM_SECRET_NAME} created`)
   }
 
   run('npx', ['firebase', 'functions:artifacts:setpolicy', '--location', region, '--force', '--project', projectId])
-}
-
-function writeAlias(env: string, updated: Firebaserc | null): void {
-  step(`.firebaserc alias "${env}"`)
-  if (updated === null) {
-    console.log('  already set')
-    return
-  }
-  writeFirebaserc(updated)
-  console.log('  written (it is gitignored, keep a note of the ids elsewhere)')
 }
 
 async function main(): Promise<void> {
@@ -423,9 +352,8 @@ async function main(): Promise<void> {
   })
   const env = values.env
   if (env !== 'dev' && env !== 'prod') throw new Error('--env must be dev or prod.')
-  const rc = readFirebaserc() ?? {}
-  const projectId = values['project-id'] ?? rc.projects?.[env]
-  if (!projectId) throw new Error(`--project-id is required: .firebaserc has no "${env}" alias yet.`)
+  const labelled = labelledProjectIds(env)
+  const projectId = provisionProjectId(env, values['project-id'], labelled)
   if (!PROJECT_ID_PATTERN.test(projectId)) {
     throw new Error('--project-id must be 6–30 lowercase letters, digits or hyphens, starting with a letter.')
   }
@@ -443,34 +371,37 @@ async function main(): Promise<void> {
     console.log('\nWarning: this prod id has no random suffix (e.g. appliance-checks-<6 random letters and digits>), so the site')
     console.log('is easy to guess and find. Project ids are permanent; see docs/infra-setup.md.\n')
   }
-  const aliasUpdate = rc.projects?.[env] === projectId ? null : withAlias(rc, env, projectId)
-  console.log(`.firebaserc ${env}:     ${aliasUpdate === null ? 'already set' : 'will be written'}`)
-  if (gcloud.toLowerCase() !== firebase.toLowerCase()) {
-    throw new Error('The gcloud and Firebase CLI accounts differ. Switch one so they match, then re-run.')
+  const otherEnv = env === 'dev' ? 'prod' : 'dev'
+  if (labelledProjectIds(otherEnv).includes(projectId)) {
+    throw new Error(`${projectId} is labelled \`${ENV_LABEL}=${otherEnv}\`: did you mean ENV=${otherEnv}?`)
   }
+  const alreadyLabelled = labelled.includes(projectId)
+  console.log(`label ${env}:     ${alreadyLabelled ? 'already set' : 'will be added'}`)
+  assertAccountsMatch(gcloud, firebase)
   await confirm(`Provision ${env} as ${gcloud}? [y/N] `)
 
   ensureProject(env, projectId)
+  ensureLabel(env, projectId, alreadyLabelled)
+  const billed = billingEnabled(projectId)
   ensureServices(projectId)
   ensureFirestore(projectId, region)
   ensureHosting(projectId)
   const appId = ensureWebApp(projectId)
-  const config = webConfig(projectId, appId)
   const siteKey = ensureRecaptchaKey(projectId)
   const number = projectNumber(projectId)
   await setAppCheckProvider(projectId, number, appId, siteKey)
   await enforceFirestore(projectId, number)
   await enableEmailLinkSignIn(projectId)
   await enforceAuth(projectId, number)
-  const debugToken = ensureDebugToken(env, projectId, appId)
-  const sheetsWebKey = ensureSheetsWebKey(env, projectId)
-  writeEnvValues(env, config, siteKey, sheetsWebKey, debugToken)
+  ensureDebugToken(env, projectId, appId, billed)
+  ensureSheetsWebKey(env, projectId)
   const keyName = ensureSheetsKey(projectId)
-  await ensureFunctions(env, projectId, region)
-  writeAlias(env, aliasUpdate)
+  await ensureFunctions(projectId, region, billed)
 
   console.log('\nDone. To use the Sheets API key in this shell:')
   console.log(`  export SHEETS_API_KEY=$(gcloud services api-keys get-key-string ${keyName} --format='value(keyString)')`)
+  console.log('\nTo make yourself the superadmin, sign in once at /admin/sign-in, then:')
+  console.log(`  npm run cli:set-superadmin -- --project ${env} --email <you>`)
   console.log('\nNote: App Check enforcement (Firestore and Auth) can take up to 15 minutes to take effect.')
 }
 
