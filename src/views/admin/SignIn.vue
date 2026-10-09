@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import LandingLayout from '../../components/LandingLayout.vue'
 import {
   adminHome,
   authErrorMessage,
@@ -75,18 +76,10 @@ async function confirmEmailAndSignIn(): Promise<void> {
 </script>
 
 <template>
-  <div id="app">
-    <header>
-      <div class="header-titles">
-        <div class="header-callsign">
-          Admin sign-in
-        </div>
-      </div>
-    </header>
-
+  <LandingLayout>
     <div
       v-if="stage === 'loading'"
-      class="screen active screen-loading"
+      class="panel"
     >
       <div class="spinner" />
       <div class="loading-text">
@@ -96,7 +89,7 @@ async function confirmEmailAndSignIn(): Promise<void> {
 
     <div
       v-else-if="stage === 'error'"
-      class="screen active screen-error"
+      class="panel"
     >
       <div class="error-icon">
         ⚠️
@@ -114,11 +107,11 @@ async function confirmEmailAndSignIn(): Promise<void> {
 
     <div
       v-else-if="stage === 'linkSent'"
-      class="screen active screen-picker"
+      class="panel"
     >
-      <div class="picker-heading">
+      <h2 class="picker-heading">
         Check your inbox
-      </div>
+      </h2>
       <p class="error-msg">
         We've sent a sign-in link to {{ email }}.
       </p>
@@ -126,12 +119,12 @@ async function confirmEmailAndSignIn(): Promise<void> {
 
     <form
       v-else-if="stage === 'enterEmail'"
-      class="screen active screen-picker"
+      class="panel"
       @submit.prevent="requestLink"
     >
-      <div class="picker-heading">
+      <h2 class="picker-heading">
         Sign in
-      </div>
+      </h2>
       <input
         v-model="email"
         type="email"
@@ -141,7 +134,7 @@ async function confirmEmailAndSignIn(): Promise<void> {
       >
       <button
         type="submit"
-        class="small-btn fit-btn positive"
+        class="small-btn positive"
       >
         Send sign-in link
       </button>
@@ -149,12 +142,12 @@ async function confirmEmailAndSignIn(): Promise<void> {
 
     <form
       v-else-if="stage === 'confirmEmail'"
-      class="screen active screen-picker"
+      class="panel"
       @submit.prevent="confirmEmailAndSignIn"
     >
-      <div class="picker-heading">
+      <h2 class="picker-heading">
         Confirm your email
-      </div>
+      </h2>
       <p class="error-msg">
         Enter the email you requested the link with to finish signing in.
       </p>
@@ -167,10 +160,25 @@ async function confirmEmailAndSignIn(): Promise<void> {
       >
       <button
         type="submit"
-        class="small-btn fit-btn positive"
+        class="small-btn positive"
       >
         Continue
       </button>
     </form>
-  </div>
+  </LandingLayout>
 </template>
+
+<style scoped>
+.panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: min(100%, 20rem);
+}
+
+.panel .small-btn {
+  min-height: 2.75rem;
+  padding: 0 20px;
+}
+</style>
