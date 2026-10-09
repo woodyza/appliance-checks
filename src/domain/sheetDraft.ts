@@ -153,3 +153,13 @@ export function planPublish(loaded: LoadedState, draft: CheckSheetDraft | null, 
   if (problems.messages.length > 0) return { kind: 'invalid', problems }
   return { kind: 'publish', version: (draft.baseVersion ?? 0) + 1 }
 }
+
+export type DiscardPlan = { kind: 'stale' } | { kind: 'discard' }
+
+// Unlike an edit or Publish, the pointer isn't checked: a Draft whose Check Sheet was replaced
+// can only be discarded.
+export function planDiscard(loaded: LoadedState, draft: CheckSheetDraft | null): DiscardPlan {
+  if (loaded.draftExists !== (draft !== null)) return { kind: 'stale' }
+  if (draft && draft.baseVersion !== loaded.baseVersion) return { kind: 'stale' }
+  return { kind: 'discard' }
+}

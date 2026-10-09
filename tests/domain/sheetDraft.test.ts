@@ -4,6 +4,7 @@ import {
   type DraftEdit,
   type DraftOp,
   editOp,
+  planDiscard,
   planDraftEdit,
   planPublish,
   startDraft,
@@ -257,5 +258,35 @@ describe('planPublish', () => {
       kind: 'publish',
       version: 1,
     })
+  })
+})
+
+describe('planDiscard', () => {
+  function draft(overrides: Partial<CheckSheetDraft> = {}): CheckSheetDraft {
+    return { baseVersion: 1, origin: { type: 'editor' }, sections: sheet(), ...overrides }
+  }
+
+  it('discards the draft the screen loaded', () => {
+    expect(planDiscard({ draftExists: true, baseVersion: 1 }, draft())).toEqual({ kind: 'discard' })
+  })
+
+  it('is stale when the loaded draft no longer exists', () => {
+    expect(planDiscard({ draftExists: true, baseVersion: 1 }, null)).toEqual({ kind: 'stale' })
+  })
+
+  it("is stale when the draft's base differs from the loaded one", () => {
+    expect(planDiscard({ draftExists: true, baseVersion: 1 }, draft({ baseVersion: 2 }))).toEqual({ kind: 'stale' })
+  })
+
+  it('is stale when a draft appeared that the screen did not load', () => {
+    expect(planDiscard({ draftExists: false, baseVersion: 1 }, draft())).toEqual({ kind: 'stale' })
+  })
+
+  it('discards nothing when there was no draft and still is none', () => {
+    expect(planDiscard({ draftExists: false, baseVersion: 1 }, null)).toEqual({ kind: 'discard' })
+  })
+
+  it('discards a draft whose Check Sheet was replaced, since the pointer plays no part', () => {
+    expect(planDiscard({ draftExists: true, baseVersion: 3 }, draft({ baseVersion: 3 }))).toEqual({ kind: 'discard' })
   })
 })
