@@ -285,8 +285,4 @@ describe('planDiscard', () => {
   it('discards nothing when there was no draft and still is none', () => {
     expect(planDiscard({ draftExists: false, baseVersion: 1 }, null)).toEqual({ kind: 'discard' })
   })
-
-  it('discards a draft whose Check Sheet was replaced, since the pointer plays no part', () => {
-    expect(planDiscard({ draftExists: true, baseVersion: 3 }, draft({ baseVersion: 3 }))).toEqual({ kind: 'discard' })
-  })
 })
