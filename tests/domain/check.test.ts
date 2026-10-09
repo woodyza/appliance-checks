@@ -323,16 +323,22 @@ describe('selectorDates', () => {
     expect(result).toEqual(['2026-09-07', '2026-09-14'])
   })
 
-  it('includes the upcoming Check on an early day', () => {
-    const result = selectorDates([], '2026-10-05', '2026-10-05', '2026-10-10', 1, '2026-10-12')
+  it('keeps the previous Check from the month before once the current Check is the default', () => {
+    const result = selectorDates(['2026-09-25'], '2026-10-02', '2026-10-02', '2026-10-02', 5, null)
 
-    expect(result).toEqual(['2026-10-05', '2026-10-12'])
+    expect(result).toEqual(['2026-09-04', '2026-09-11', '2026-09-18', '2026-09-25', '2026-10-02'])
+  })
+
+  it('includes the upcoming Check on an early day', () => {
+    const result = selectorDates([], '2026-10-12', '2026-10-12', '2026-10-17', 1, '2026-10-19')
+
+    expect(result).toEqual(['2026-10-05', '2026-10-12', '2026-10-19'])
   })
 
   it('includes an existing Check dated after today on an early day', () => {
-    const result = selectorDates(['2026-10-11'], '2026-10-05', '2026-10-05', '2026-10-10', 1, '2026-10-12')
+    const result = selectorDates(['2026-10-18'], '2026-10-12', '2026-10-12', '2026-10-17', 1, '2026-10-19')
 
-    expect(result).toEqual(['2026-10-05', '2026-10-11', '2026-10-12'])
+    expect(result).toEqual(['2026-10-05', '2026-10-12', '2026-10-18', '2026-10-19'])
   })
 
   it('spans from the current date month when the upcoming Check defaults into the next month', () => {

@@ -1,4 +1,4 @@
-import { checkDatesBetween, firstOfMonth, isLastOfMonth, nextCheckDate } from './schedule'
+import { addDays, checkDatesBetween, firstOfMonth, isLastOfMonth, nextCheckDate } from './schedule'
 import type { Check, CheckSheetVersion, Item, Section } from './types'
 
 export function isDue(item: Item, monthly: boolean): boolean {
@@ -139,7 +139,10 @@ export function selectorDates(
   checkDay: number,
   upcoming: string | null,
 ): string[] {
-  const from = firstOfMonth(defaultDate < currentDate ? defaultDate : currentDate)
+  // The previous Check stays reachable after the current one is started, so it can still be
+  // finished late when it falls in the month before.
+  const previousDate = addDays(currentDate, -7)
+  const from = firstOfMonth(defaultDate < previousDate ? defaultDate : previousDate)
   const computed = checkDatesBetween(from, upcoming ?? currentDate, checkDay)
   const existingInRange = existingDates.filter((date) => date >= from && date <= (upcoming ?? today))
   return [...new Set([...computed, ...existingInRange])].sort()
