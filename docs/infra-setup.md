@@ -40,7 +40,7 @@ make provision ENV=prod PROJECT_ID=<prod project id>
 
 After the first run the id comes from the label, so re-runs are just `make provision ENV=dev`. If `PROJECT_ID` is given and a different project already has the label, provision stops.
 
-For each project this creates, or checks and skips if it's already there:
+For each project this creates, or checks and skips if it's already there (the browser Sheets key is the exception: a re-run resets its restrictions):
 
 - the Google Cloud project with Firebase added
 - the Firestore, Firebase Rules, Firebase Hosting, App Check, reCAPTCHA Enterprise, Sheets, API Keys, Identity Toolkit (Auth) and Resource Manager APIs
@@ -63,7 +63,7 @@ For each project this creates, or checks and skips if it's already there:
 
 Nothing is written to local files. The web config, reCAPTCHA site key and browser Sheets key are looked up by `make deploy` (and `cli:check-prehijack`) each run; if one is missing, they stop and say to run `make provision`.
 
-Local dev (the emulator) has no browser Sheets key by default, so an import in the admin UI fails with Google's "API key not valid" error. To try one, put the `dev` key in a gitignored `.env.development.local` as `VITE_SHEETS_API_KEY=<key>` (`dev`'s key allows only `http://localhost:5173`, and Vite refuses to start if that port is busy):
+Local dev (the emulator) has no browser Sheets key by default, so an import in the admin UI fails with Google's "API key not valid" error. To try one, put the `dev` key in a gitignored `.env.development.local` as `VITE_SHEETS_API_KEY=<key>` (`dev`'s key allows `http://localhost:5173` and no other local port, and Vite refuses to start if 5173 is busy):
 
 ```bash
 gcloud services api-keys get-key-string $(gcloud services api-keys list --project <dev project id> --filter='displayName=appliance-checks-sheets-web' --format='value(name)') --format='value(keyString)'
