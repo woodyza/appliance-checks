@@ -89,25 +89,20 @@ function optIn(): void {
           {{ session.appliance.value?.callsign ?? 'Appliance Checks' }}
         </div>
       </div>
-      <div
+      <select
         v-if="!session.loading.value && !session.error.value"
-        class="week-selector-wrap"
+        class="week-selector"
+        :value="session.selectedDate.value"
+        @change="onSelectorChange"
       >
-        <span class="week-selector-label">Check</span>
-        <select
-          class="week-selector"
-          :value="session.selectedDate.value"
-          @change="onSelectorChange"
+        <option
+          v-for="date in session.selectorDates.value"
+          :key="date"
+          :value="date"
         >
-          <option
-            v-for="date in session.selectorDates.value"
-            :key="date"
-            :value="date"
-          >
-            {{ formatSelectorLabel(date) }}
-          </option>
-        </select>
-      </div>
+          {{ formatSelectorLabel(date) }}
+        </option>
+      </select>
     </header>
 
     <div
