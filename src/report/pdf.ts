@@ -10,9 +10,17 @@ const LABEL_WIDTH_MM = 70
 const QTY_WIDTH_MM = 14
 const FONT_SIZE = 7
 
-const GREY: [number, number, number] = [224, 224, 224]
-const NOT_DUE_FILL: [number, number, number] = [90, 90, 90]
-const NA_FILL: [number, number, number] = [235, 235, 235]
+type Fill = [number, number, number]
+
+const GREY: Fill = [224, 224, 224]
+const NOT_DUE_FILL: Fill = [90, 90, 90]
+const NA_FILL: Fill = [235, 235, 235]
+
+// Light tints so the black X and text stay legible, and the X marks still carry the answer on a
+// greyscale print.
+const GOOD_FILL: Fill = [198, 239, 206]
+const BAD_FILL: Fill = [255, 199, 206]
+const MISSING_FILL: Fill = [255, 235, 156]
 
 // jsPDF's built-in Helvetica only covers WinAnsi, so macrons (Taupō, Ōtaki) would otherwise be
 // dropped: fall back to the base letter.
@@ -37,18 +45,46 @@ function statusLabel(column: ReportColumn): string {
   return column.percent === 100 ? 'Complete' : `${String(column.percent)}%`
 }
 
-// A `yn`/`value`/`na`/`notDue` cell renders as one or two entries in the row's cell array: `yn`
-// needs its own Y and N sub-cells, the rest span both, per the design's cell rendering rules.
-function dateCells(cell: ReportCell): CellInput[] {
+// The status colour of each rendered cell of a report cell (see `dateCells`): a Y/N answer
+// shades only the column it landed in, anything due but unanswered is amber across the lot.
+export function cellFills(cell: ReportCell): (Fill | undefined)[] {
   switch (cell.kind) {
     case 'yn':
-      return [{ content: cell.value === 'Y' ? 'X' : '' }, { content: cell.value === 'N' ? 'X' : '' }]
+      if (cell.value === 'Y') return [GOOD_FILL, undefined]
+      if (cell.value === 'N') return [undefined, BAD_FILL]
+      return [MISSING_FILL, MISSING_FILL]
+    case 'value':
+      return [cell.value === null ? MISSING_FILL : undefined]
+    case 'na':
+    case 'notDue':
+      return [undefined]
+  }
+}
+
+export function footerFill(column: ReportColumn): Fill {
+  return column.check && column.percent === 100 ? GOOD_FILL : MISSING_FILL
+}
+
+function fillStyle(fill: Fill | undefined): { fillColor?: Fill } {
+  return fill ? { fillColor: fill } : {}
+}
+
+// A `yn`/`value`/`na`/`notDue` cell renders as one or two entries in the row's cell array: `yn`
+// needs its own Y and N sub-cells, the rest span both, per the design's cell rendering rules.
+export function dateCells(cell: ReportCell): CellInput[] {
+  const [first, second] = cellFills(cell)
+  switch (cell.kind) {
+    case 'yn':
+      return [
+        { content: cell.value === 'Y' ? 'X' : '', styles: fillStyle(first) },
+        { content: cell.value === 'N' ? 'X' : '', styles: fillStyle(second) },
+      ]
     case 'na':
       return [{ content: 'n/a', colSpan: 2, styles: { fillColor: NA_FILL, halign: 'center' } }]
     case 'notDue':
       return [{ content: '', colSpan: 2, styles: { fillColor: NOT_DUE_FILL } }]
     case 'value':
-      return [{ content: pdfText(cell.value ?? ''), colSpan: 2, styles: { halign: 'center' } }]
+      return [{ content: pdfText(cell.value ?? ''), colSpan: 2, styles: { halign: 'center', ...fillStyle(first) } }]
   }
 }
 
@@ -85,11 +121,15 @@ function headRow(columns: ReportColumn[]): RowInput {
   ]
 }
 
-function footRow(columns: ReportColumn[]): RowInput {
+export function footRow(columns: ReportColumn[]): RowInput {
   return [
     { content: '', colSpan: 2 },
     ...columns.map(
-      (column): CellDef => ({ content: statusLabel(column), colSpan: 2, styles: { halign: 'center', fontStyle: 'bold' } }),
+      (column): CellDef => ({
+        content: statusLabel(column),
+        colSpan: 2,
+        styles: { halign: 'center', fontStyle: 'bold', fillColor: footerFill(column) },
+      }),
     ),
   ]
 }
@@ -122,7 +162,7 @@ export async function buildMonthlyReportPdf(report: MonthlyReport, generatedAt: 
     margin: { left: PAGE_MARGIN_MM, right: PAGE_MARGIN_MM },
     theme: 'grid',
     styles: { fontSize: FONT_SIZE, cellPadding: 1, lineColor: [180, 180, 180], lineWidth: 0.1, overflow: 'linebreak' },
-    // Greyscale like the March PDF, since these get printed.
+    // Plain white head and foot; the foot's status cells carry their own colour.
     headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold' },
     footStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold' },
     head: [headRow(report.columns)],
