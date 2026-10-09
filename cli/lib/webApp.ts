@@ -3,6 +3,8 @@ import { capture } from './shell'
 export const SHEETS_WEB_KEY_NAME = 'appliance-checks-sheets-web'
 export const WEB_APP_NAME = 'appliance-checks-web'
 export const RECAPTCHA_KEY_NAME = 'appliance-checks-web'
+// Vite's default port; vite.config.ts sets strictPort so the dev server never moves off it.
+const VITE_DEV_ORIGIN = 'http://localhost:5173'
 
 export interface WebSdkConfig {
   projectId: string
@@ -36,6 +38,14 @@ export function apiKeyName(projectId: string, displayName: string): string | nul
     throw new Error(`Found ${names.length} API keys named "${displayName}"; delete the extras in the console.`)
   }
   return names[0] ?? null
+}
+
+// The HTTP referrers the browser Sheets key is restricted to: this site's origins, plus the Vite
+// dev server on `dev`.
+export function sheetsWebReferrers(env: string, projectId: string): string[] {
+  const referrers = [`https://${projectId}.web.app/*`, `https://${projectId}.firebaseapp.com/*`]
+  if (env === 'dev') referrers.push(`${VITE_DEV_ORIGIN}/*`)
+  return referrers
 }
 
 export function sheetsKeyString(projectId: string, keyName: string): string {

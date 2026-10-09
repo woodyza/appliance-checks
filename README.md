@@ -40,7 +40,7 @@ Domain language is in [`CONTEXT.md`](./CONTEXT.md). Decisions worth keeping are 
 make dev
 ```
 
-Runs the Firestore and Auth emulators, a dev seed and Vite in one terminal (via `concurrently`); Ctrl-C stops them all. Vite serves at `http://localhost:5173` and talks to the emulator (`.env.development`, committed, points at the `demo-appliance-checks` project). There's no local mode that talks to `dev`/`prod`.
+Runs the Firestore and Auth emulators, a dev seed and Vite in one terminal (via `concurrently`); Ctrl-C stops them all. Vite serves at `http://localhost:5173` (it stops with an error rather than moving to another port if that one is busy) and talks to the emulator (`.env.development`, committed, points at the `demo-appliance-checks` project). There's no local mode that talks to `dev`/`prod`.
 
 - The seed creates a `devtst` brigade the first time (appliances `dev1` and `dev2`, a small Check Sheet and a previous Check to copy from) and prints its links: open `http://localhost:5173/devtst/dev1`. After that it leaves the data alone; `npm run dev:seed -- --reset` rebuilds it while `make dev` is running.
 - The seed also creates the emulator's superadmin Auth user (`e2e-admin@example.com`, UID `emulator-superadmin`, matching `firestore.rules`). See the local sign-in steps below.

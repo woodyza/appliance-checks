@@ -20,6 +20,7 @@ import {
   findWebAppId,
   RECAPTCHA_KEY_NAME,
   SHEETS_WEB_KEY_NAME,
+  sheetsWebReferrers,
   siteKeyFromName,
   WEB_APP_NAME,
 } from './lib/webApp'
@@ -46,7 +47,6 @@ const FUNCTIONS_SERVICES = [
   'secretmanager.googleapis.com',
 ]
 const SHEETS_KEY_NAME = 'appliance-checks-sheets-cli'
-const VITE_DEV_ORIGIN = 'http://localhost:5173'
 const RECAPTCHA_MIN_SCORE = 0.3
 const PROJECT_ID_PATTERN = /^[a-z][a-z0-9-]{4,28}[a-z0-9]$/
 
@@ -157,19 +157,24 @@ function ensureSheetsKey(projectId: string): string {
 }
 
 // The browser import's key ends up in the bundle, so it's restricted to the Sheets API and to this
-// site's origins (plus the Vite dev server on `dev`).
+// site's origins (plus the Vite dev server on `dev`). A re-run resets an existing key to the same
+// restrictions, so a changed referrer list reaches keys created earlier.
 function ensureSheetsWebKey(env: string, projectId: string): void {
   step(`Browser Sheets API key "${SHEETS_WEB_KEY_NAME}"`)
-  if (apiKeyName(projectId, SHEETS_WEB_KEY_NAME)) {
-    console.log('  already exists')
+  const restrictions = [
+    '--api-target=service=sheets.googleapis.com',
+    `--allowed-referrers=${sheetsWebReferrers(env, projectId).join(',')}`,
+  ]
+  const existing = apiKeyName(projectId, SHEETS_WEB_KEY_NAME)
+  if (existing) {
+    const updating = capture('gcloud', ['services', 'api-keys', 'update', existing, `--project=${projectId}`, ...restrictions])
+    if (!updating.ok) throw new Error(`Could not update the browser Sheets API key: ${updating.stderr}`)
+    console.log('  already exists; referrers updated')
     return
   }
-  const referrers = [`https://${projectId}.web.app/*`, `https://${projectId}.firebaseapp.com/*`]
-  if (env === 'dev') referrers.push(`${VITE_DEV_ORIGIN}/*`)
   const creating = capture('gcloud', [
     'services', 'api-keys', 'create', `--project=${projectId}`,
-    `--display-name=${SHEETS_WEB_KEY_NAME}`, '--api-target=service=sheets.googleapis.com',
-    `--allowed-referrers=${referrers.join(',')}`,
+    `--display-name=${SHEETS_WEB_KEY_NAME}`, ...restrictions,
   ])
   if (!creating.ok) throw new Error(`Could not create the browser Sheets API key: ${creating.stderr}`)
 }

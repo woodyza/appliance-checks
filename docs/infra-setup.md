@@ -40,7 +40,7 @@ make provision ENV=prod PROJECT_ID=<prod project id>
 
 After the first run the id comes from the label, so re-runs are just `make provision ENV=dev`. If `PROJECT_ID` is given and a different project already has the label, provision stops.
 
-For each project this creates, or checks and skips if it's already there:
+For each project this creates, or checks and skips if it's already there (the browser Sheets key is the exception: a re-run resets its restrictions):
 
 - the Google Cloud project with Firebase added
 - the Firestore, Firebase Rules, Firebase Hosting, App Check, reCAPTCHA Enterprise, Sheets, API Keys, Identity Toolkit (Auth) and Resource Manager APIs
@@ -58,12 +58,12 @@ For each project this creates, or checks and skips if it's already there:
 - the Auth Email link (passwordless) sign-in provider, via `PATCH identitytoolkit.googleapis.com/admin/v2/projects/{p}/config` (no firebase-tools command enables it). On a new project this fails with `CONFIGURATION_NOT_FOUND` until Authentication has been started in the console (see section 2).
 - Auth App Check enforcement, set to `enforced`. It protects the call that sends sign-in emails, so a script can't use up the day's quota. It's best-effort: if it fails, provisioning warns and carries on. On `dev` it went through on Spark, without Identity Platform.
 - `dev` only: an App Check debug token (display name `appliance-checks-e2e`) for `make e2e ENV=dev`. It needs billing: provision enables Secret Manager, then re-registers the `E2E_APPCHECK_DEBUG_TOKEN` secret's value with App Check, or mints one, stores it in that secret and registers it. The token is never printed. Without billing it warns and skips this, and `make e2e ENV=dev` then stops until provision has run on a billed `dev`
-- a browser Sheets API key named `appliance-checks-sheets-web`, restricted to the Sheets API and to the HTTP referrers `https://<project>.web.app/*` and `https://<project>.firebaseapp.com/*` (plus `http://localhost:5173/*` on `dev`), for importing a Google Sheet in the admin UI. It ends up in the bundle by design; the restrictions are its protection. A re-run doesn't update an existing key's referrers (#20). On `dev` (October 2026) importing on the deployed site worked with it
+- a browser Sheets API key named `appliance-checks-sheets-web`, restricted to the Sheets API and to the HTTP referrers `https://<project>.web.app/*` and `https://<project>.firebaseapp.com/*` (plus `http://localhost:5173/*` on `dev`), for importing a Google Sheet in the admin UI. It ends up in the bundle by design; the restrictions are its protection. A re-run resets an existing key's Sheets API and referrer restrictions to these. On `dev` (October 2026) importing on the deployed site worked with it
 - a Sheets API key named `appliance-checks-sheets-cli`, restricted to the Sheets API, for the CLI import
 
 Nothing is written to local files. The web config, reCAPTCHA site key and browser Sheets key are looked up by `make deploy` (and `cli:check-prehijack`) each run; if one is missing, they stop and say to run `make provision`.
 
-Local dev (the emulator) has no browser Sheets key by default, so an import in the admin UI fails with Google's "API key not valid" error. To try one, put the `dev` key in a gitignored `.env.development.local` as `VITE_SHEETS_API_KEY=<key>` (`dev`'s key allows `http://localhost:5173`):
+Local dev (the emulator) has no browser Sheets key by default, so an import in the admin UI fails with Google's "API key not valid" error. To try one, put the `dev` key in a gitignored `.env.development.local` as `VITE_SHEETS_API_KEY=<key>` (`dev`'s key allows `http://localhost:5173` and no other local port, and Vite refuses to start if 5173 is busy):
 
 ```bash
 gcloud services api-keys get-key-string $(gcloud services api-keys list --project <dev project id> --filter='displayName=appliance-checks-sheets-web' --format='value(name)') --format='value(keyString)'
