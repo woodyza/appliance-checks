@@ -30,3 +30,15 @@ export function gcloudAccount(): string {
   }
   return account
 }
+
+export function assertAccountsMatch(gcloud: string, firebase: string): void {
+  if (gcloud.toLowerCase() !== firebase.toLowerCase()) {
+    throw new Error('The gcloud and Firebase CLI accounts differ. Switch one so they match, then re-run.')
+  }
+}
+
+export function gcloudAccessToken(): string {
+  const token = capture('gcloud', ['auth', 'print-access-token'])
+  if (!token.ok) throw new Error(`Could not get a gcloud access token: ${token.stderr}`)
+  return token.stdout
+}

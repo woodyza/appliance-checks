@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase-admin/app'
 import { getFirestore } from 'firebase-admin/firestore'
 import { logger } from 'firebase-functions'
-import { defineSecret, defineString, projectID } from 'firebase-functions/params'
+import { defineSecret, projectID } from 'firebase-functions/params'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import { createTransport } from 'nodemailer'
 import { CHECK_TIME_ZONE, today } from '../../src/domain/schedule'
@@ -12,14 +12,14 @@ import { sendWeeklyEmails } from './sendWeeklyEmails'
 initializeApp()
 
 const gmailAppPassword = defineSecret('GMAIL_APP_PASSWORD')
-const mailFrom = defineString('MAIL_FROM')
+const mailFrom = defineSecret('MAIL_FROM')
 
 export const dailyEmails = onSchedule(
   {
     schedule: '0 7 * * *',
     timeZone: CHECK_TIME_ZONE,
     region: 'australia-southeast1',
-    secrets: [gmailAppPassword],
+    secrets: [gmailAppPassword, mailFrom],
     retryCount: 0,
     timeoutSeconds: 300,
   },

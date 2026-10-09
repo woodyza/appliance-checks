@@ -1,6 +1,13 @@
 import type { Firestore } from 'firebase-admin/firestore'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { addAppliance, createBrigade, getCurrentVersion, updateBrigadeSettings, writeVersion } from '../../cli/lib/store'
+import {
+  addAppliance,
+  createBrigade,
+  getCurrentVersion,
+  setSuperadmin,
+  updateBrigadeSettings,
+  writeVersion,
+} from '../../cli/lib/store'
 import { resolveTarget } from '../../cli/lib/target'
 import { reconcile } from '../../src/domain/import/reconcile'
 import type { ParsedCheckSheet, Section } from '../../src/domain/types'
@@ -87,6 +94,30 @@ describe('updateBrigadeSettings', () => {
 
   it('fails when the brigade does not exist', async () => {
     await expect(updateBrigadeSettings(db, 'unknown-slug', { weeklyEmail: true })).rejects.toThrow(/No brigade/)
+  })
+})
+
+describe('setSuperadmin', () => {
+  async function superadminData(): Promise<Record<string, unknown> | undefined> {
+    return (await db.collection('deployConfig').doc('superadmin').get()).data()
+  }
+
+  it('creates the doc on the first call, with nothing before', async () => {
+    const { before, after } = await setSuperadmin(db, { uid: 'uid-1', email: 'root@x.nz' })
+
+    expect(before).toBeNull()
+    expect(after).toEqual({ uid: 'uid-1', email: 'root@x.nz' })
+    expect(await superadminData()).toMatchObject({ uid: 'uid-1', email: 'root@x.nz' })
+  })
+
+  it('replaces the superadmin and returns the previous one', async () => {
+    await setSuperadmin(db, { uid: 'uid-1', email: 'root@x.nz' })
+
+    const { before, after } = await setSuperadmin(db, { uid: 'uid-2', email: 'new@x.nz' })
+
+    expect(before).toEqual({ uid: 'uid-1', email: 'root@x.nz' })
+    expect(after).toEqual({ uid: 'uid-2', email: 'new@x.nz' })
+    expect(await superadminData()).toMatchObject({ uid: 'uid-2', email: 'new@x.nz' })
   })
 })
 

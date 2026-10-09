@@ -2,7 +2,7 @@ import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app'
 import { type Auth, getAuth } from 'firebase-admin/auth'
 import { getFirestore, type Firestore } from 'firebase-admin/firestore'
 import { GoogleAuth } from 'google-auth-library'
-import { readFirebaserc } from './firebaserc'
+import { labelledProjectIds, pickLabelledProject } from './projectId'
 import { confirm } from './prompt'
 
 export type ProjectTarget = 'dev' | 'prod' | 'emulator'
@@ -18,15 +18,7 @@ export function parseProjectTarget(value: string | undefined): ProjectTarget {
 }
 
 export function readProjectId(target: 'dev' | 'prod'): string {
-  const rc = readFirebaserc()
-  if (rc === null) {
-    throw new Error(`.firebaserc not found: cannot resolve the "${target}" project alias. See docs/infra-setup.md.`)
-  }
-  const projectId = rc.projects?.[target]
-  if (!projectId) {
-    throw new Error(`.firebaserc has no "${target}" project alias. See docs/infra-setup.md.`)
-  }
-  return projectId
+  return pickLabelledProject(target, labelledProjectIds(target))
 }
 
 async function activeAccountEmail(): Promise<string> {

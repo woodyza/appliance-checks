@@ -14,6 +14,7 @@ const SETTINGS_PATH = `${BRIGADE_PATH}/private/settings`
 const APPLIANCE_PATH = `${BRIGADE_PATH}/appliances/8011`
 const APPLIANCE_8012_PATH = `${BRIGADE_PATH}/appliances/8012`
 const VERSION_PATH = `${APPLIANCE_PATH}/checkSheetVersions/1`
+const SUPERADMIN_CONFIG_PATH = 'deployConfig/superadmin'
 
 const TODAY = today()
 const CHECK_PATH = `${BRIGADE_PATH}/checks/8011_${TODAY}`
@@ -116,6 +117,7 @@ beforeAll(async () => {
       brigadeIds: ['b2'],
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     })
+    await db.doc(SUPERADMIN_CONFIG_PATH).set({ uid: 'emulator-superadmin', email: 'root@example.com' })
   })
 })
 
@@ -434,6 +436,20 @@ describe('superadmin', () => {
     ['version', VERSION_PATH, { version: 2 }],
   ])('denies writing to %s', async (_name, path, data) => {
     await assertFails(superadminDb().doc(path).set(data))
+  })
+})
+
+describe('deployConfig/superadmin', () => {
+  it.each([
+    ['unauthenticated', unauthedDb],
+    ['another signed-in user', otherUserDb],
+    ['the superadmin', superadminDb],
+  ])('denies get to %s', async (_name, dbFor) => {
+    await assertFails(dbFor().doc(SUPERADMIN_CONFIG_PATH).get())
+  })
+
+  it('denies set to the superadmin', async () => {
+    await assertFails(superadminDb().doc(SUPERADMIN_CONFIG_PATH).set({ uid: 'someone-else' }))
   })
 })
 

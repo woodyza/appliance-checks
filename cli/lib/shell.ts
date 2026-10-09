@@ -6,8 +6,8 @@ export interface Captured {
   stderr: string
 }
 
-export function capture(command: string, args: string[]): Captured {
-  const result = spawnSync(command, args, { encoding: 'utf8' })
+export function capture(command: string, args: string[], options: { input?: string } = {}): Captured {
+  const result = spawnSync(command, args, { encoding: 'utf8', input: options.input })
   if (result.error) throw new Error(`${command}: ${result.error.message}`)
   return { ok: result.status === 0, stdout: result.stdout.trim(), stderr: result.stderr.trim() }
 }
