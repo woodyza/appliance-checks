@@ -63,6 +63,7 @@ export interface ParsedCheckSheet {
 export interface Check {
   applianceId: string
   scheduledDate: string
+  /** Set on create, so a later Check Day change can't flip whether an existing Check includes Monthly Items. */
   monthly: boolean
   checkSheetVersion: number
   responses: Record<string, string>

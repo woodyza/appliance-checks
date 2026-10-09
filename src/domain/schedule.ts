@@ -1,3 +1,4 @@
+/** Fixed rather than the device's zone, so the client and Cloud Functions derive the same Check ids. */
 export const CHECK_TIME_ZONE = 'Pacific/Auckland'
 
 /** How many days before its scheduled date a Check can be started. */
