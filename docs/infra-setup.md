@@ -132,7 +132,9 @@ npx firebase functions:log --only billingKillSwitch --project <dev project id>
 gcloud billing projects describe <dev project id> --format='value(billingEnabled)'   # False once it's fired
 ```
 
-Then recover as above, and check that an under-budget message (`"costAmount":1`) only logs "Under budget". Still to record here from the first run: whether Project Billing Manager was enough to unlink, whether Hosting and Firestore kept serving and the data survived, and what else broke or was deleted.
+Then recover as above, and check that an under-budget message (`"costAmount":1`) only logs "Under budget".
+
+What the first run on `dev` showed (October 2026): the fake notification unlinked billing, so Project Billing Manager is enough, and the Firestore data was unaffected.
 
 ## 6. Moving to another Google account
 
