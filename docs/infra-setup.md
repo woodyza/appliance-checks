@@ -134,7 +134,7 @@ gcloud billing projects describe <dev project id> --format='value(billingEnabled
 
 Then recover as above, and check that an under-budget message (`"costAmount":1`) only logs "Under budget".
 
-What the first run on `dev` showed (October 2026): the fake notification unlinked billing, so Project Billing Manager is enough. Nothing was deleted (going by the audit log): the site and Firestore data were unaffected, and the secrets, topic, service account, budget, functions and scheduler job all survived. The functions came back on their own when billing was relinked, so provision only re-applied settings and the redeploy didn't touch them.
+What the first run on `dev` showed (October 2026): the fake notification unlinked billing, so Project Billing Manager is enough. Nothing was deleted (going by the audit log): the site and Firestore data were unaffected, and the secrets, topic, service account, budget, functions and scheduler job all survived. The functions came back on their own when billing was relinked, so provision only re-applied settings and the redeploy didn't touch them. An under-budget notification only logged "Under budget".
 
 ## 6. Moving to another Google account
 
