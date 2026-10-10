@@ -43,3 +43,9 @@ export function provisionProjectId(env: string, requested: string | undefined, i
   }
   return requested
 }
+
+export function projectNumber(projectId: string): string {
+  const described = capture('gcloud', ['projects', 'describe', projectId, '--format=value(projectNumber)'])
+  if (!described.ok || !described.stdout) throw new Error(`Could not get the project number: ${described.stderr}`)
+  return described.stdout
+}

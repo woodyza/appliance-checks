@@ -31,7 +31,7 @@ Each new project also needs Authentication started once in the console. The API 
 
 ## 3. Provision each environment
 
-Project ids are globally unique and permanent, and the site is served at `<project-id>.web.app`, so the id is effectively the site's address. For prod, add a random suffix so it can't be guessed (e.g. `appliance-checks-` plus 6 random letters and digits, such as the output of `LC_ALL=C tr -dc a-z0-9 </dev/urandom | head -c6`; `make provision` warns if it's missing), and don't publish it: this repo is public, so ids stay out of git. The ids live in GCP as a project label (`appliance-checks-env=dev` or `prod`), which `make provision` adds. Every `dev`/`prod` command lists the active projects with that label, as the gcloud account, and stops if there are none or more than one. `dev` is on the Blaze plan (billing linked), since deployed functions need it and the weekly email's done-when runs there. `prod` stays on the free Spark plan, so abuse can only take it offline, never cost money, until the spending cap and the review of anonymous access in #23 are sorted. Link billing to a project in the console; `make provision` only checks for it.
+Project ids are globally unique and permanent, and the site is served at `<project-id>.web.app`, so the id is effectively the site's address. For prod, add a random suffix so it can't be guessed (e.g. `appliance-checks-` plus 6 random letters and digits, such as the output of `LC_ALL=C tr -dc a-z0-9 </dev/urandom | head -c6`; `make provision` warns if it's missing), and don't publish it: this repo is public, so ids stay out of git. The ids live in GCP as a project label (`appliance-checks-env=dev` or `prod`), which `make provision` adds. Every `dev`/`prod` command lists the active projects with that label, as the gcloud account, and stops if there are none or more than one. Both are meant to be on the Blaze plan (billing linked), since deployed functions need it, with a budget that unlinks billing if it's exceeded (see [Cost bounds](#cost-bounds)). Link billing to a project in the console; `make provision` only checks for it. With billing on, provision and deploy need a role on the billing account as well as the project: Billing Account Administrator (or Costs Manager) for provision, to create the budget, and Billing Account Viewer or higher for deploy, which checks the budget exists.
 
 ```bash
 make provision ENV=dev PROJECT_ID=<dev project id>
@@ -47,7 +47,7 @@ For each project this creates, or checks and skips if it's already there (the br
 - the project label `appliance-checks-env=<env>`, set through the Resource Manager API (GA gcloud can't set project labels), before the Auth step so a first run that stops there still leaves it
 - the `(default)` Firestore database, in `australia-southeast1` unless you pass `REGION=...` (a database's location can't be changed later)
 - the default Hosting site
-- the weekly VSO email's functions setup, only if billing is enabled on the project (otherwise it warns and skips these, see #23):
+- the weekly VSO email's functions setup, only if billing is enabled on the project (otherwise it warns and skips these):
   - the Cloud Functions, Cloud Build, Artifact Registry, Cloud Run, Eventarc, Cloud Scheduler and Secret Manager APIs
   - the `GMAIL_APP_PASSWORD` secret, prompted for with hidden input if it doesn't exist yet (an existing one is left alone). It's an app password for the dedicated Gmail account. Turn on [2-Step Verification](https://myaccount.google.com/signinoptions/twosv) first, then create one at [App passwords](https://myaccount.google.com/apppasswords) (the Security page no longer links to it). Google shows it in four groups of four; paste it without the spaces. To check or replace it later, it's in [Secret Manager](https://console.cloud.google.com/security/secret-manager) for the project
   - the `MAIL_FROM` secret, the sending Gmail address, prompted for (and checked) if it doesn't exist yet. It's a secret rather than a config value so the address stays out of this public repo
@@ -60,6 +60,11 @@ For each project this creates, or checks and skips if it's already there (the br
 - `dev` only: an App Check debug token (display name `appliance-checks-e2e`) for `make e2e ENV=dev`. It needs billing: provision enables Secret Manager, then re-registers the `E2E_APPCHECK_DEBUG_TOKEN` secret's value with App Check, or mints one, stores it in that secret and registers it. The token is never printed. Without billing it warns and skips this, and `make e2e ENV=dev` then stops until provision has run on a billed `dev`
 - a browser Sheets API key named `appliance-checks-sheets-web`, restricted to the Sheets API and to the HTTP referrers `https://<project>.web.app/*` and `https://<project>.firebaseapp.com/*` (plus `http://localhost:5173/*` on `dev`), for importing a Google Sheet in the admin UI. It ends up in the bundle by design; the restrictions are its protection. A re-run resets an existing key's Sheets API and referrer restrictions to these. On `dev` (October 2026) importing on the deployed site worked with it
 - a Sheets API key named `appliance-checks-sheets-cli`, restricted to the Sheets API, for the CLI import
+- the billing kill switch, only if billing is enabled (see [Cost bounds](#cost-bounds)). Provision checks the billing account permissions it needs first, before changing anything else, and stops if they're missing:
+  - the Pub/Sub, Cloud Billing and Cloud Billing Budget APIs
+  - the Pub/Sub topic `billing-kill-switch`, which Cloud Billing's budget service account may publish to
+  - the service account `billing-kill-switch`, for the `billingKillSwitch` function to run as, with Project Billing Manager (to unlink billing) and Cloud Run Invoker (Pub/Sub pushes to the function as this account) on the project, and nothing else
+  - the budget `appliance-checks-kill-switch-<env>` on the project's billing account: scoped to the project, 10 a month in the billing account's currency, emailing billing admins at 50%, 90% and 100%, and publishing to the topic. A re-run resets an existing budget's amount, topic and thresholds to these
 
 Nothing is written to local files. The web config, reCAPTCHA site key and browser Sheets key are looked up by `make deploy` (and `cli:check-prehijack`) each run; if one is missing, they stop and say to run `make provision`.
 
@@ -75,10 +80,10 @@ It's safe to re-run, e.g. after a step failed or a project was partly set up in 
 
 1. `make provision ENV=<env> PROJECT_ID=<id>`. It creates the project, then stops at the Auth step (`CONFIGURATION_NOT_FOUND`).
 2. In the console, click "Get started" under Authentication, and link billing if wanted.
-3. `make provision ENV=<env>` again. With billing on, this also does the functions setup and the `dev` debug token.
+3. `make provision ENV=<env>` again. With billing on, this also does the functions setup, the kill switch and the `dev` debug token.
 4. `make deploy ENV=<env>`, sign in once at `/admin/sign-in`, run `cli:set-superadmin` (below), then deploy again.
 
-Linking billing later (eg prod after #23) needs another provision run. Deploy already enforces that: with billing on and the secrets missing, it stops with "run `make provision`".
+Linking billing later (or relinking it after the kill switch fires) needs another provision run. Deploy enforces that: with billing on and the secrets, topic, service account or budget missing, it stops with "run `make provision`".
 
 ### Superadmin bootstrap
 
@@ -91,7 +96,7 @@ The superadmin's UID isn't known until they've signed in once, so it can't be pr
 
 If the doc can't be read for any reason other than not existing, deploy stops rather than deploying a ruleset that locks the superadmin out.
 
-Firebase Auth's email-link sign-in is capped at 5 emails/day project-wide on the Spark plan (25,000 on Blaze). `dev` is on Blaze now, but `prod` stays on Spark until #23, so the `prod` bootstrap and any testing against a real inbox there should be mindful of that limit.
+Firebase Auth's email-link sign-in is capped at 5 emails/day project-wide on the Spark plan (25,000 on Blaze). A project without billing, or one whose kill switch has fired, is on Spark, so be mindful of that limit there.
 
 App Check enforcement can take up to 15 minutes to take effect after `make provision` finishes, so wait before relying on it (e.g. before `make e2e ENV=dev` or checking the site in a browser).
 
@@ -125,7 +130,7 @@ npm run cli:import-check-sheet -- --project dev --brigade <slug> --appliance 801
 
 Hosting sends `X-Robots-Tag: noindex, nofollow` and serves a `robots.txt` that disallows everything, so well-behaved crawlers don't index the site even if a link leaks.
 
-`make deploy` also deploys the `dailyEmails` function when billing is enabled on the project (esbuild bundles it into the gitignored `functions/lib/` first), and otherwise skips it with a warning. If billing is on but provision's functions step hasn't run (no `GMAIL_APP_PASSWORD` or `MAIL_FROM` secret), it stops before deploying anything and tells you to run `make provision` first. If a functions deploy fails with "Error generating the service identity for pubsub.googleapis.com", re-run it: on `dev` (October 2026) that was transient. It replaces Hosting content and Firestore rules. `firestore.indexes.json` is the source of truth for indexes, so if any were created in the console the deploy offers to delete them: answer No unless you mean it.
+`make deploy` also deploys the `dailyEmails` and `billingKillSwitch` functions when billing is enabled on the project (esbuild bundles them into the gitignored `functions/lib/` first), and otherwise skips them with a warning. If billing is on but provision's functions or kill switch steps haven't run (no `GMAIL_APP_PASSWORD` or `MAIL_FROM` secret, or no kill switch topic, service account or budget), it stops before deploying anything and tells you to run `make provision` first. If a functions deploy fails with "Error generating the service identity for pubsub.googleapis.com", re-run it: on `dev` (October 2026) that was transient. It replaces Hosting content and Firestore rules. `firestore.indexes.json` is the source of truth for indexes, so if any were created in the console the deploy offers to delete them: answer No unless you mean it.
 
 Appliances and their Check Sheets can also be added in the admin UI instead (`/<slug>/admin`, signed in as the superadmin), including the Google Sheet import.
 
@@ -175,12 +180,48 @@ What the first `dev` run showed (September 2026):
 - **App Check-rejected requests don't seem to count.** A batch of unattested REST reads all got 403s and didn't show up in the billable usage reports the next day, while the e2e and manual traffic did. So App Check looks like it protects the quota as well as the data (going by the usage reports; Google doesn't document it).
 - **The debug token works** for `make e2e ENV=dev`, and a real device on iOS Safari (iPad) passed App Check at the 0.3 minimum score.
 
+## Cost bounds
+
+Blaze has no built-in spending cap, so each billed project has a kill switch: a budget that publishes to Pub/Sub, and the `billingKillSwitch` function, which unlinks billing once the reported cost passes the budget. The project then falls back to Spark, where abuse can only take it offline. It's bounded rather than hard: budget data lags by hours (sometimes more than a day), so the worst case is the budget plus whatever accrues in that lag. For Hosting egress, the largest exposure, a day at 100 Mbps is about 1 TB, or $150.
+
+Why more than the console's tools (#23, October 2026):
+
+- **Spend cap budgets don't cover us.** They only cover Gemini, Vertex AI, Cloud Run and Cloud Run functions, one project and service per budget. The only one we'd cap is `dailyEmails`, which the public can't trigger. Firestore, Hosting egress, reCAPTCHA Enterprise, Artifact Registry, Secret Manager and Scheduler aren't capped.
+- **reCAPTCHA Enterprise moves to Premium once billing is linked:** 10k assessments a month free, a flat $8 up to 100k, then $1 per 1,000, with no cap. Each App Check token exchange is an assessment.
+- **App Check raises the bar, but isn't a ceiling.** Tokens are bearer tokens valid for the 1h TTL and Firestore doesn't use limited-use tokens, so one headless browser that passes the 0.3 score can farm tokens for a script. Anonymous Firestore exposure is modest: creates need a real appliance and a date within about two months, so storage is bounded, but the number of reads and updates isn't (a few cents per 100k; each anonymous write also costs a read, for the rule's `get()`).
+- **Hosting has no protection at all:** App Check doesn't cover it, there's no rate limit, and egress is $0.15/GB after 10 GB a month. The main chunk is about 790 KB uncompressed, so about 1.3M fetches make 1 TB.
+- **Whether App Check-rejected requests are billed** is still undocumented. Google documents that rules-denied requests pay for the rules' `get()`s and the one-read query minimum; App Check rejects before the rules run, and the usage reports above suggest it's free, but that's our observation only.
+- **TBC:** whether invalid reCAPTCHA tokens sent straight to App Check's exchange endpoint (the API key and app id are public) create billable assessments. The kill switch bounds that either way.
+
+### When it fires
+
+Billing admins get the budget's emails at 50%, 90% and 100% first. Once it's unlinked, the functions stop (no weekly or Monthly Report emails) and the project is on Spark's limits, including 5 sign-in emails a day. To recover, once the cause is dealt with:
+
+1. Relink billing to the project in the console.
+2. `make provision ENV=<env>`, then `make deploy ENV=<env>`.
+3. Check `dailyEmails` (run it by hand, above) and, on `dev`, `make e2e ENV=dev`.
+
+The budget resets monthly, but if the month's spend is still over it, the next notification unlinks billing again. Raise `KILL_SWITCH_BUDGET` in `cli/provision.ts` and re-run provision if that's not what you want.
+
+### Checking it on `dev`
+
+After `make provision ENV=dev` and `make deploy ENV=dev`, send a fake over-budget notification:
+
+```bash
+gcloud pubsub topics publish billing-kill-switch --project <dev project id> \
+  --message '{"budgetDisplayName":"test","costAmount":11,"budgetAmount":10,"currencyCode":"NZD"}'
+npx firebase functions:log --only billingKillSwitch --project <dev project id>
+gcloud billing projects describe <dev project id> --format='value(billingEnabled)'   # False once it's fired
+```
+
+Then recover as above, and check that an under-budget message (`"costAmount":1`) only logs "Under budget". Still to record here from the first run: whether Project Billing Manager was enough to unlink, whether Hosting and Firestore kept serving and the data survived, and what else broke or was deleted (functions, secrets, Artifact Registry, Scheduler).
+
 ## Moving to another Google account
 
 **Prefer transferring ownership over reprovisioning.** Projects aren't tied to the account that created them:
 
 1. In the Firebase console for each project, Project settings → Users and permissions → add the new account as Owner.
-2. Log gcloud and the Firebase CLI in as the new account and check `make deploy` still works.
+2. Log gcloud and the Firebase CLI in as the new account and check `make deploy` still works. If the projects move to a different billing account too, re-run `make provision` for each: budgets belong to the billing account, so the old kill switch budget no longer applies (deploy stops until there's a new one).
 3. Remove the old account.
 
 This keeps the data, the `*.web.app` URLs and therefore every printed QR code.

@@ -2,10 +2,13 @@ import { initializeApp } from 'firebase-admin/app'
 import { getFirestore } from 'firebase-admin/firestore'
 import { logger } from 'firebase-functions'
 import { defineSecret, projectID } from 'firebase-functions/params'
+import { onMessagePublished } from 'firebase-functions/v2/pubsub'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
+import { GoogleAuth } from 'google-auth-library'
 import { createTransport } from 'nodemailer'
 import { CHECK_TIME_ZONE, today } from '../../src/domain/schedule'
 import type { EmailMessage } from './email'
+import { applyBudgetNotification, KILL_SWITCH_SERVICE_ACCOUNT_ID, KILL_SWITCH_TOPIC } from './killSwitch'
 import { sendMonthlyReportEmails } from './sendMonthlyReportEmails'
 import { sendWeeklyEmails } from './sendWeeklyEmails'
 
@@ -55,5 +58,32 @@ export const dailyEmails = onSchedule(
     // next Check Day; a failed Monthly Report email is retried by tomorrow's run.
     const failures = weekly.failed.length + monthly.failed.length
     if (failures > 0) throw new Error(`${failures} email failure(s)`)
+  },
+)
+
+// Unlinks billing once the budget `make provision` sets up is exceeded, which drops the project
+// back to Spark. It runs as its own service account, so only this function can unlink billing.
+// No retries: if unlinking fails, the budget's next notification (within hours) tries again.
+export const billingKillSwitch = onMessagePublished(
+  {
+    topic: KILL_SWITCH_TOPIC,
+    region: 'australia-southeast1',
+    serviceAccount: `${KILL_SWITCH_SERVICE_ACCOUNT_ID}@`,
+    retry: false,
+  },
+  async (event) => {
+    const unlink = async (): Promise<void> => {
+      const client = await new GoogleAuth({ scopes: 'https://www.googleapis.com/auth/cloud-platform' }).getClient()
+      await client.request({
+        url: `https://cloudbilling.googleapis.com/v1/projects/${projectID.value()}/billingInfo`,
+        method: 'PUT',
+        data: { billingAccountName: '' },
+      })
+    }
+
+    const outcome = await applyBudgetNotification(event.data.message.json, unlink)
+    if (outcome.action === 'under-budget') logger.info('Under budget', outcome)
+    else if (outcome.action === 'unlinked') logger.error('Over budget: unlinked billing', outcome)
+    else logger.error('Unreadable budget notification', outcome)
   },
 )

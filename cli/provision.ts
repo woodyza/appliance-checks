@@ -8,9 +8,22 @@ import {
   gcloudAccessToken,
   gcloudAccount,
 } from './lib/accounts'
-import { billingEnabled } from './lib/billing'
-import { GMAIL_SECRET_NAME, MAIL_FROM_SECRET_NAME } from './lib/functions'
-import { ENV_LABEL, hasRandomSuffix, labelledProjectIds, provisionProjectId } from './lib/projectId'
+import { KILL_SWITCH_SERVICE_ACCOUNT_ID, KILL_SWITCH_TOPIC } from '../functions/src/killSwitch'
+import {
+  billingAccount,
+  billingEnabled,
+  findKillSwitchBudget,
+  killSwitchBudgetName,
+  listBudgets,
+} from './lib/billing'
+import {
+  GMAIL_SECRET_NAME,
+  killSwitchServiceAccount,
+  MAIL_FROM_SECRET_NAME,
+  serviceAccountExists,
+  topicExists,
+} from './lib/functions'
+import { ENV_LABEL, hasRandomSuffix, labelledProjectIds, projectNumber, provisionProjectId } from './lib/projectId'
 import { askText, confirm } from './lib/prompt'
 import { createSecret, DEBUG_TOKEN_SECRET, readSecret, secretExists } from './lib/secrets'
 import { capture, run } from './lib/shell'
@@ -46,6 +59,13 @@ const FUNCTIONS_SERVICES = [
   'cloudscheduler.googleapis.com',
   'secretmanager.googleapis.com',
 ]
+const KILL_SWITCH_SERVICES = ['pubsub.googleapis.com', 'cloudbilling.googleapis.com', 'billingbudgets.googleapis.com']
+// In the billing account's currency. Normal use is close to nothing, so this only trips on abuse.
+const KILL_SWITCH_BUDGET = '10'
+const KILL_SWITCH_THRESHOLDS = ['0.5', '0.9', '1.0']
+const BUDGET_PERMISSIONS = ['billing.budgets.create', 'billing.budgets.list', 'billing.budgets.update']
+// The service account Cloud Billing publishes budget notifications as.
+const BUDGET_PUBLISHER = 'serviceAccount:billing-budget-alert@system.gserviceaccount.com'
 const SHEETS_KEY_NAME = 'appliance-checks-sheets-cli'
 const RECAPTCHA_MIN_SCORE = 0.3
 const PROJECT_ID_PATTERN = /^[a-z][a-z0-9-]{4,28}[a-z0-9]$/
@@ -236,12 +256,6 @@ async function restPatch(projectId: string, url: string, body: object, updateMas
   if (!response.ok) throw new Error(`PATCH ${url} failed (${String(response.status)}): ${await response.text()}`)
 }
 
-function projectNumber(projectId: string): string {
-  const described = capture('gcloud', ['projects', 'describe', projectId, '--format=value(projectNumber)'])
-  if (!described.ok || !described.stdout) throw new Error(`Could not get the project number: ${described.stderr}`)
-  return described.stdout
-}
-
 async function setAppCheckProvider(projectId: string, number: string, appId: string, siteKey: string): Promise<void> {
   step('App Check provider: reCAPTCHA Enterprise')
   await restPatch(
@@ -326,7 +340,7 @@ function ensureDebugToken(env: string, projectId: string, appId: string, billed:
 async function ensureFunctions(projectId: string, region: string, billed: boolean): Promise<void> {
   step('Cloud Functions (weekly VSO email)')
   if (!billed) {
-    console.log(`  warning: billing isn't enabled on ${projectId}, so functions can't deploy; skipping (see #23)`)
+    console.log(`  warning: billing isn't enabled on ${projectId}, so functions can't deploy; skipping`)
     return
   }
 
@@ -355,6 +369,104 @@ async function ensureFunctions(projectId: string, region: string, billed: boolea
   }
 
   run('npx', ['firebase', 'functions:artifacts:setpolicy', '--location', region, '--force', '--project', projectId])
+}
+
+// Budgets live on the billing account, so creating one needs a billing-account role that owning
+// the project doesn't give. Checked before the rest of provisioning rather than failing at the end.
+async function assertBudgetPermissions(projectId: string): Promise<void> {
+  step('Billing account permissions for the kill switch budget')
+  run('gcloud', ['services', 'enable', ...KILL_SWITCH_SERVICES, `--project=${projectId}`])
+  const account = billingAccount(projectId)
+  const url = `https://cloudbilling.googleapis.com/v1/${account}:testIamPermissions`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${gcloudAccessToken()}`,
+      'Content-Type': 'application/json',
+      'x-goog-user-project': projectId,
+    },
+    body: JSON.stringify({ permissions: BUDGET_PERMISSIONS }),
+  })
+  if (!response.ok) throw new Error(`POST ${url} failed (${String(response.status)}): ${await response.text()}`)
+  const granted = ((await response.json()) as { permissions?: string[] }).permissions ?? []
+  const missing = BUDGET_PERMISSIONS.filter((permission) => !granted.includes(permission))
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing ${missing.join(', ')} on ${account}: provisioning a billed project needs Billing Account ` +
+        'Administrator (or Billing Account Costs Manager) on its billing account; see docs/infra-setup.md.',
+    )
+  }
+  console.log(`  ok on ${account}`)
+}
+
+// A newly created service account can take a few seconds to be visible to IAM policy updates.
+async function addBinding(args: string[]): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    const added = capture('gcloud', [...args, '--quiet', '--format=none'])
+    if (added.ok) return
+    if (attempt === 5) throw new Error(`gcloud ${args.join(' ')} failed: ${added.stderr}`)
+    await new Promise((resolve) => setTimeout(resolve, 5000))
+  }
+}
+
+async function ensureKillSwitch(env: string, projectId: string, number: string, billed: boolean): Promise<void> {
+  step('Billing kill switch')
+  if (!billed) {
+    console.log(`  warning: billing isn't enabled on ${projectId}, so there's nothing to cap; skipping`)
+    return
+  }
+
+  if (topicExists(projectId)) {
+    console.log(`  topic ${KILL_SWITCH_TOPIC} already exists`)
+  } else {
+    run('gcloud', ['pubsub', 'topics', 'create', KILL_SWITCH_TOPIC, `--project=${projectId}`])
+  }
+
+  const serviceAccount = killSwitchServiceAccount(projectId)
+  if (serviceAccountExists(projectId)) {
+    console.log(`  service account ${serviceAccount} already exists`)
+  } else {
+    run('gcloud', [
+      'iam', 'service-accounts', 'create', KILL_SWITCH_SERVICE_ACCOUNT_ID,
+      '--display-name=Billing kill switch', `--project=${projectId}`,
+    ])
+  }
+  // run.invoker because Pub/Sub pushes to the function as this account, and firebase-tools only
+  // grants that to the default compute account.
+  for (const role of ['roles/billing.projectManager', 'roles/run.invoker']) {
+    await addBinding([
+      'projects', 'add-iam-policy-binding', projectId,
+      `--member=serviceAccount:${serviceAccount}`, `--role=${role}`, '--condition=None',
+    ])
+  }
+  await addBinding([
+    'pubsub', 'topics', 'add-iam-policy-binding', KILL_SWITCH_TOPIC, `--project=${projectId}`,
+    `--member=${BUDGET_PUBLISHER}`, '--role=roles/pubsub.publisher',
+  ])
+  console.log(`  ${serviceAccount} can unlink billing; budget notifications can publish to ${KILL_SWITCH_TOPIC}`)
+
+  // A re-run resets the amount, topic and thresholds, so a changed budget reaches existing projects.
+  const account = billingAccount(projectId)
+  const budgetName = killSwitchBudgetName(env)
+  const settings = [
+    `--billing-project=${projectId}`, `--budget-amount=${KILL_SWITCH_BUDGET}`,
+    `--notifications-rule-pubsub-topic=projects/${projectId}/topics/${KILL_SWITCH_TOPIC}`,
+  ]
+  const existing = findKillSwitchBudget(listBudgets(account, projectId), budgetName, number)
+  if (existing) {
+    // The full `billingAccounts/X/budgets/Y` name; adding `--billing-account` here would prefix it twice.
+    run('gcloud', [
+      'billing', 'budgets', 'update', existing.name, ...settings, '--clear-threshold-rules',
+      ...KILL_SWITCH_THRESHOLDS.map((percent) => `--add-threshold-rule=percent=${percent}`),
+    ])
+    console.log(`  budget ${budgetName} already exists; reset to ${KILL_SWITCH_BUDGET}`)
+  } else {
+    run('gcloud', [
+      'billing', 'budgets', 'create', `--billing-account=${account}`, `--display-name=${budgetName}`,
+      `--filter-projects=projects/${projectId}`, ...settings,
+      ...KILL_SWITCH_THRESHOLDS.map((percent) => `--threshold-rule=percent=${percent}`),
+    ])
+  }
 }
 
 async function main(): Promise<void> {
@@ -399,6 +511,7 @@ async function main(): Promise<void> {
   ensureServices(projectId)
   await ensureLabel(env, projectId, alreadyLabelled)
   const billed = billingEnabled(projectId)
+  if (billed) await assertBudgetPermissions(projectId)
   ensureFirestore(projectId, region)
   ensureHosting(projectId)
   const appId = ensureWebApp(projectId)
@@ -412,6 +525,7 @@ async function main(): Promise<void> {
   ensureSheetsWebKey(env, projectId)
   const keyName = ensureSheetsKey(projectId)
   await ensureFunctions(projectId, region, billed)
+  await ensureKillSwitch(env, projectId, number, billed)
 
   console.log('\nDone. To use the Sheets API key in this shell:')
   console.log(`  export SHEETS_API_KEY=$(gcloud services api-keys get-key-string ${keyName} --format='value(keyString)')`)
