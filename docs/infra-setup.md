@@ -83,7 +83,7 @@ It's safe to re-run, e.g. after a step failed or a project was partly set up in 
 3. `make provision ENV=<env>` again. With billing on, this also does the functions setup, the kill switch and the `dev` debug token.
 4. `make deploy ENV=<env>`, sign in once at `/admin/sign-in`, run `cli:set-superadmin` (below), then deploy again.
 
-Linking billing later (or relinking it after the kill switch fires) needs another provision run. Deploy enforces that: with billing on and the secrets, topic, service account or budget missing, it stops with "run `make provision`".
+Linking billing later (or relinking it after the kill switch fires) is a manual step, followed by another provision run. Deploy enforces that: with billing on and the secrets, topic, service account or budget missing, it stops with "run `make provision`".
 
 ### Superadmin bootstrap
 
@@ -197,17 +197,18 @@ Why more than the console's tools (#23, October 2026):
 
 Billing admins get the budget's emails at 50%, 90% and 100% first. Once it's unlinked, the functions stop (no weekly or Monthly Report emails) and the project is on Spark's limits, including 5 sign-in emails a day. To recover, once the cause is dealt with:
 
-1. Relink billing to the project in the console.
-2. `make provision ENV=<env>`, then `make deploy ENV=<env>`.
+1. Relink billing by hand: neither `make provision` nor `make deploy` links billing (they only check whether it's on, and skip the billed steps if not). Use the console, or `gcloud billing projects link <project id> --billing-account=<account id>`.
+2. `make provision ENV=<env>`, then `make deploy ENV=<env>`, which put back anything the unlink removed.
 3. Check `dailyEmails` (run it by hand, above) and, on `dev`, `make e2e ENV=dev`.
 
 The budget resets monthly, but if the month's spend is still over it, the next notification unlinks billing again. Raise `KILL_SWITCH_BUDGET` in `cli/provision.ts` and re-run provision if that's not what you want.
 
 ### Checking it on `dev`
 
-After `make provision ENV=dev` and `make deploy ENV=dev`, send a fake over-budget notification:
+After `make provision ENV=dev` and `make deploy ENV=dev`, note the billing account (you'll need it to relink), then send a fake over-budget notification:
 
 ```bash
+gcloud billing projects describe <dev project id> --format='value(billingAccountName)'   # billingAccounts/<account id>
 gcloud pubsub topics publish billing-kill-switch --project <dev project id> \
   --message '{"budgetDisplayName":"test","costAmount":11,"budgetAmount":10,"currencyCode":"NZD"}'
 npx firebase functions:log --only billingKillSwitch --project <dev project id>
