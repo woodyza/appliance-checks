@@ -1,6 +1,6 @@
-import { collection, deleteDoc, doc, getDoc, getDocs, runTransaction, serverTimestamp, updateDoc } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, runTransaction, serverTimestamp, updateDoc } from 'firebase/firestore'
 import type { PublishProblems } from '../domain/publishValidation'
-import { type DraftEdit, type LoadedState, planDraftEdit, planPublish } from '../domain/sheetDraft'
+import { type DraftEdit, type LoadedState, planDiscard, planDraftEdit, planPublish } from '../domain/sheetDraft'
 import type { Appliance, CheckSheetDraft, CheckSheetVersion } from '../domain/types'
 import { db } from '../firebase'
 import type { ApplianceSummary } from './checks'
@@ -155,6 +155,13 @@ export async function publishDraft(slug: string, applianceId: string, loaded: Lo
   })
 }
 
-export async function discardDraft(slug: string, applianceId: string): Promise<void> {
-  await deleteDoc(draftRef(slug, applianceId))
+export async function discardDraft(slug: string, applianceId: string, loaded: LoadedState): Promise<void> {
+  const draftDoc = draftRef(slug, applianceId)
+  await runTransaction(db, async (tx) => {
+    const draftSnap = await tx.get(draftDoc)
+    const draft = draftSnap.exists() ? (draftSnap.data() as CheckSheetDraft) : null
+
+    if (planDiscard(loaded, draft).kind === 'stale') throw new StaleEditor()
+    tx.delete(draftDoc)
+  })
 }

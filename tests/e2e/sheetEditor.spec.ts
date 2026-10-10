@@ -140,6 +140,42 @@ test('edits survive a reload and Discard reverts them', async ({ page }) => {
   await expect(page.locator('.review-banner')).toHaveCount(0)
 })
 
+test('a failed Enter shows the saved value and is not sent again on blur', async ({ page }) => {
+  let blocking = true
+  await page.route(
+    (url) => url.pathname.endsWith('/documents:commit'),
+    async (route) => {
+      if (!blocking) return route.continue()
+      await route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        headers: {
+          'access-control-allow-origin': route.request().headers().origin ?? '*',
+          'access-control-allow-credentials': 'true',
+        },
+        body: JSON.stringify({ error: { code: 403, status: 'PERMISSION_DENIED', message: 'blocked by test' } }),
+      })
+    },
+  )
+  await openEditor(page, 'e2ed7')
+  const cab = editorSection(page, 'Cab')
+  const helmet = editorRow(cab, 'Helmet').locator('input[data-cell^="label-"]')
+
+  await helmet.fill('Helmet (new)')
+  await helmet.press('Enter')
+  await expect(page.locator('#toast')).toContainText("Couldn't save")
+  await expect(helmet).toBeFocused()
+  await expect(helmet).toHaveValue('Helmet')
+
+  // Edits are queued, so once this one lands any resend from the blur would have landed first.
+  blocking = false
+  await rename(editorRow(cab, 'Radio'), 'Radio (new)')
+  await expect(editorRow(cab, 'Radio (new)')).toBeVisible()
+  await expect(page.locator('.sheet-row .saving')).toHaveCount(0)
+  await expect(editorRow(cab, 'Helmet')).toBeVisible()
+  await expect(editorRow(cab, 'Helmet (new)')).toHaveCount(0)
+})
+
 test('drags an Item into another Section', async ({ page }) => {
   await openEditor(page, 'e2ed5')
   const radio = editorRow(editorSection(page, 'Cab'), 'Radio')

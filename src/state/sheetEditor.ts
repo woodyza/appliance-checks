@@ -262,12 +262,16 @@ export function useSheetEditor(slug: string, applianceId: string): SheetEditor {
     await enqueue(async () => {
       try {
         if (stale) return
-        await discardDraft(slug, applianceId)
+        await discardDraft(slug, applianceId, loaded)
         await load(true)
         showToast('Discarded', false)
       } catch (err) {
-        console.error(err)
-        showToast("Couldn't discard", true)
+        if (err instanceof StaleEditor) {
+          reloadPage()
+        } else {
+          console.error(err)
+          showToast("Couldn't discard", true)
+        }
       } finally {
         busy.value = false
       }

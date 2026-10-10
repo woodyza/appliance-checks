@@ -11,32 +11,35 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ commit: [value: string]; enter: [] }>()
 
-// Keep what's typed while focused: a re-render from the committed draft mustn't wipe it.
+// Keep what's typed until it's committed: a re-render from the committed draft mustn't wipe it.
+// Once committed, follow `value`, so an edit that fails shows what's saved rather than being sent
+// again on blur.
 const text = ref(props.value)
-let editing = false
+let typed = false
 
 watch(
   () => props.value,
   (value) => {
-    if (!editing) text.value = value
+    if (!typed) text.value = value
   },
 )
 
 function commit(): void {
+  if (!typed) return
+  typed = false
   const trimmed = text.value.trim()
   if (trimmed !== props.value) emit('commit', trimmed)
 }
 
-function onFocus(): void {
-  editing = true
+function onInput(): void {
+  typed = true
 }
 
 async function onBlur(): Promise<void> {
-  editing = false
   commit()
   // A commit that doesn't land (refused, or invalid) leaves `value` as it was: show that.
   await nextTick()
-  if (!editing) text.value = props.value
+  if (!typed) text.value = props.value
 }
 
 function onEnter(): void {
@@ -54,7 +57,7 @@ function onEnter(): void {
     :data-cell="cell"
     :placeholder="placeholder"
     :class="['cell-input', pending ? 'saving' : '', invalid ? 'invalid' : '']"
-    @focus="onFocus"
+    @input="onInput"
     @blur="onBlur"
     @keydown.enter.prevent="onEnter"
   >
