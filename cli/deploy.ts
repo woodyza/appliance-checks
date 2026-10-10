@@ -55,13 +55,13 @@ async function main(): Promise<void> {
 
   const targets = ['hosting', 'firestore:rules', 'firestore:indexes']
   if (billingEnabled(projectId)) {
-    const missing = missingFunctionsSetup(projectId)
+    const missing = missingFunctionsSetup(env, projectId)
     if (missing.length > 0) {
-      throw new Error(`Functions aren't set up on ${projectId} (missing ${missing.join(' and ')} secret(s)): run \`make provision ENV=${env}\` first.`)
+      throw new Error(`Functions aren't set up on ${projectId} (missing ${missing.join(', ')}): run \`make provision ENV=${env}\` first.`)
     }
     targets.push('functions')
   } else {
-    console.log(`Billing isn't enabled on ${projectId}: skipping functions (see #23).`)
+    console.log(`Billing isn't enabled on ${projectId}: skipping functions.`)
   }
 
   await confirm(`Deploy to ${env}? [y/N] `)

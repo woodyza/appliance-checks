@@ -18,13 +18,7 @@ The Firebase project owner, who adds and removes Brigade Admins and VSOs, and ca
 A person who administers exactly one brigade, e.g. its Check Sheets and Monthly Reports.
 
 **VSO**:
-Volunteer Support Officer: a member of a regional team who administers their assigned brigades with the same powers as a Brigade Admin, and also decides where and whether those brigades' weekly email goes. The VSO team covers the region together.
-
-**Report Email**:
-The address a brigade's weekly email goes to, often a shared VSO team address.
-
-**Monthly Report Email**:
-The address a brigade's Monthly Reports are emailed to once the month's last Checks are done. Set by its Brigade Admins or VSOs.
+Volunteer Support Officer: a member of a regional team who administers their assigned brigades with the same powers as a Brigade Admin, and also decides where and whether those brigades' Weekly VSO Email goes. The VSO team covers the region together.
 
 ## Appliances
 
@@ -85,3 +79,20 @@ The brigade's record of Defects, kept outside this system.
 **Monthly Report**:
 The record of one appliance's Checks for a calendar month.
 _Avoid_: Check sheet (for the filled-in month), monthly PDF
+
+## Emails
+
+**Weekly VSO Email**:
+The email sent on a brigade's Check Day saying how Complete each of its appliances' previous Check is, so its VSOs can follow up while the Check is still acceptable.
+_Avoid_: Weekly email, VSO email, weekly report
+
+**Weekly VSO Email address**:
+Where a brigade's Weekly VSO Email goes, often a shared VSO team address. Without one, it goes to the brigade's VSOs. Set by its VSOs.
+_Avoid_: Report Email
+
+**Monthly Report Email**:
+The email that sends a brigade its Monthly Reports once the month's last Checks are done.
+_Avoid_: Monthly email
+
+**Monthly Report Email address**:
+Where a brigade's Monthly Report Email goes. Set by its Brigade Admins or VSOs.
