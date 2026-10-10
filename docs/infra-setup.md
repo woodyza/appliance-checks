@@ -115,7 +115,7 @@ The `billingKillSwitch` function unlinks billing once the budget's reported cost
 The functions stop (no daily emails) and the project is on Spark's limits. To recover, once the cause is dealt with:
 
 1. Relink billing by hand, in the console or with `gcloud billing projects link <project id> --billing-account=<account id>`.
-2. `make provision ENV=<env>`, then `make deploy ENV=<env>`.
+2. `make provision ENV=<env>` as a check: it recreates anything missing. If it created anything (e.g. a secret), `make deploy ENV=<env>` too, since the functions pin secret versions at deploy.
 3. Run the daily emails job by hand (section 3) and, on `dev`, `make e2e ENV=dev`.
 
 If the month's spend is still over the budget, the next notification unlinks billing again. To change the budget, change `KILL_SWITCH_BUDGET` in `cli/provision.ts` and re-run provision.
@@ -134,7 +134,7 @@ gcloud billing projects describe <dev project id> --format='value(billingEnabled
 
 Then recover as above, and check that an under-budget message (`"costAmount":1`) only logs "Under budget".
 
-What the first run on `dev` showed (October 2026): the fake notification unlinked billing, so Project Billing Manager is enough, and the Firestore data was unaffected.
+What the first run on `dev` showed (October 2026): the fake notification unlinked billing, so Project Billing Manager is enough. Nothing was deleted (going by the audit log): the site and Firestore data were unaffected, and the secrets, topic, service account, budget, functions and scheduler job all survived. The functions came back on their own when billing was relinked, so provision only re-applied settings and the redeploy didn't touch them.
 
 ## 6. Moving to another Google account
 
