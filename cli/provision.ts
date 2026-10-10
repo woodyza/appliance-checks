@@ -296,8 +296,8 @@ async function enableEmailLinkSignIn(projectId: string): Promise<void> {
   }
 }
 
-// Needs the Identity Platform upgrade or billing on some projects (TBC); warn and carry on
-// rather than failing the rest of provisioning, and record the outcome in docs/infra-setup.md.
+// Might need the Identity Platform upgrade on some projects (on `dev` it went through on Spark
+// without it); warn and carry on rather than failing the rest of provisioning.
 async function enforceAuth(projectId: string, number: string): Promise<void> {
   step('App Check enforcement: Auth')
   try {

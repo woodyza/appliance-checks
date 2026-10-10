@@ -56,6 +56,12 @@ To sign in locally while `make dev` is running:
 
 There's no password and no real email is sent locally.
 
+Importing a Google Sheet in the admin UI needs a browser Sheets key, which the emulator doesn't have, so locally it fails with Google's "API key not valid" error. To try one, put `dev`'s key in a gitignored `.env.development.local` as `VITE_SHEETS_API_KEY=<key>` (it only allows `http://localhost:5173`):
+
+```bash
+gcloud services api-keys get-key-string $(gcloud services api-keys list --project <dev project id> --filter='displayName=appliance-checks-sheets-web' --format='value(name)') --format='value(keyString)'
+```
+
 Env files: `.env.development` is committed (emulator config). There are no env files for `dev`/`prod`: `make deploy` looks the Firebase web config and reCAPTCHA site key up from GCP each run, and finds the projects by their `appliance-checks-env` label (see [`docs/infra-setup.md`](./docs/infra-setup.md)).
 
 ## Admin sign-in
@@ -71,7 +77,7 @@ The landing page's "Admin" link goes to `/admin` and relies on that redirect. An
 - `/admin/users` lists Brigade Admins and VSOs, with "+ New user" (`/admin/users/new`); tapping one opens `/admin/users/:email` to edit or remove them.
 - `/admin/brigades` lists brigades, each opening its `/:slug/admin`; the superadmin also gets "+ New brigade" (`/admin/brigades/new`).
 - `/:slug/admin` has three sections. Details edits the brigade's name and Check Day, and, for a VSO or the superadmin, its Report Email and weekly email; only the superadmin can deactivate a brigade, and nothing deletes one. It also downloads a printable PDF with the Brigade Link's QR code. Appliances lists its appliances (including inactive ones), each with "Checks" (its check entry, disabled when that can't run) and "Edit", plus a "+ Add appliance" row. Reports has the Monthly Report picker and PDF download.
-- `/:slug/admin/:applianceId` edits one appliance: its Callsign, Active toggle and Check Sheet. Edits to the Check Sheet save to a Draft as you go; a banner summarises what changed, and Publish makes the Draft the Check Sheet that Checks use (or Discard throws it away). You can also copy another appliance's Check Sheet, or import a public Google Sheet (paste its link) from there. Importing in the browser needs `VITE_SHEETS_API_KEY`; see [`docs/infra-setup.md`](./docs/infra-setup.md).
+- `/:slug/admin/:applianceId` edits one appliance: its Callsign, Active toggle and Check Sheet. Edits to the Check Sheet save to a Draft as you go; a banner summarises what changed, and Publish makes the Draft the Check Sheet that Checks use (or Discard throws it away). You can also copy another appliance's Check Sheet, or import a public Google Sheet (paste its link) from there. Importing in the browser needs `VITE_SHEETS_API_KEY`; see Local dev.
 
 The CLI's `create-brigade`, `brigade-settings`, `add-appliance` and `import-check-sheet` (below) still work as alternatives. Each admin screen's left header button goes up to its parent, and Sign out is on the person's admin home. The screens work out who you are in `src/state/auth.ts` (`adminProfile()`: your own `adminUsers` doc, or superadmin by UID) and gate on that in `src/state/adminGate.ts`; `firestore.rules` is still what actually enforces access. The browser needs `VITE_SUPERADMIN_UID` to recognise the superadmin: `.env.development` sets the emulator's, and `make deploy` passes the UID stored in Firestore (`deployConfig/superadmin`, set with `npm run cli:set-superadmin -- --project dev|prod --email <addr>`) to the build. `src/state/auth.ts` wraps Firebase Auth; `src/data/admin.ts` reads and writes brigades, their settings and admin users, and reads a month's Checks; `src/report/pdf.ts` renders the Monthly Report PDF (jsPDF + jspdf-autotable, lazy-loaded) and `src/report/qrPdf.ts` the QR code PDF (jsPDF + qrcode-generator, lazy-loaded).
 
@@ -82,7 +88,7 @@ The CLI's `create-brigade`, `brigade-settings`, `add-appliance` and `import-chec
 - `make test-unit` / `make test-emulator` — either suite on its own.
 - `make lint` / `make typecheck`
 - `make dev` — the Firestore emulator, dev seed and Vite together; Ctrl-C stops them (see Local dev).
-- `make provision ENV=dev|prod [PROJECT_ID=<id>]` — creates or checks the Firebase project and its Firestore, Hosting, App Check/reCAPTCHA and Sheets API key (plus, when billing is enabled, the weekly email's functions setup), and labels the project `appliance-checks-env=<env>`; safe to re-run. `PROJECT_ID` is only needed the first time, after that the project is found by its label. See [`docs/infra-setup.md`](./docs/infra-setup.md).
+- `make provision ENV=dev|prod [PROJECT_ID=<id>]` — creates or checks the Firebase project and its Firestore, Hosting, App Check/reCAPTCHA and Sheets API key (plus, when billing is enabled, the functions setup and the billing kill switch), and labels the project `appliance-checks-env=<env>`; safe to re-run. `PROJECT_ID` is only needed the first time, after that the project is found by its label. See [`docs/infra-setup.md`](./docs/infra-setup.md).
 - `make deploy ENV=dev|prod` — builds and deploys Hosting + Firestore rules/indexes (and the Cloud Functions, when billing is enabled on the project) to that environment, behind an account confirmation prompt.
 - `make e2e [ENV=dev]` — Playwright, kept out of `make check`. No `ENV` (default): seeds then runs against the Firestore emulator and a local Vite server. `ENV=dev`: seeds and runs against deployed `dev`, using the `E2E_APPCHECK_DEBUG_TOKEN` secret from `dev`'s Secret Manager (so `dev` needs billing). Requires `npx playwright install chromium` once.
 - `make e2e-report` — opens the HTML report from the last `make e2e` run: a screenshot and video of every spec locally, and a trace of any failure (failures only for `ENV=dev`).
@@ -102,4 +108,6 @@ npm run cli:brigade-settings -- --brigade <slug> [--report-email <addr> | --clea
 SHEETS_API_KEY=... npm run cli:import-check-sheet -- --brigade <slug> --appliance 8011 [--spreadsheet <id>] [--dry-run]
 ```
 
-`import-check-sheet` reads the spreadsheet id from the current Check Sheet version when it was itself imported; otherwise `--spreadsheet` is required. It prints an import report (matched/changed/added/removed) and does nothing if nothing changed.
+`import-check-sheet` reads the spreadsheet id from the current Check Sheet version when it was itself imported; otherwise `--spreadsheet` is required. It prints an import report (matched/changed/added/removed) and does nothing if nothing changed. The spreadsheet id is the long string in the sheet's URL (`/spreadsheets/d/<id>/edit`), and the sheet must be viewable by anyone with the link.
+
+`npm run cli:check-prehijack -- --email <a spare address you can receive>` re-checks ADR 0005's account pre-hijacking result on `dev`; it explains itself as it runs.
