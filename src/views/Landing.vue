@@ -41,14 +41,14 @@ import { currentUser } from '../state/auth'
     </p>
     <router-link
       v-if="currentUser"
-      class="admin"
+      class="pill-btn"
       to="/admin"
     >
       Admin
     </router-link>
     <router-link
       v-else
-      class="admin"
+      class="pill-btn"
       to="/admin/sign-in"
     >
       Admin sign-in
@@ -78,18 +78,5 @@ import { currentUser } from '../state/auth'
   width: 2rem;
   height: 2rem;
   color: var(--accent);
-}
-
-.admin {
-  display: inline-flex;
-  align-items: center;
-  min-height: 2.75rem;
-  padding: 10px 20px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  color: var(--text-dim);
-  font-size: 0.9rem;
-  font-weight: 600;
-  text-decoration: none;
 }
 </style>
