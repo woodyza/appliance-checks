@@ -98,7 +98,7 @@ async function confirmEmailAndSignIn(): Promise<void> {
         {{ errorMessage }}
       </div>
       <button
-        class="retry-btn"
+        class="pill-btn"
         @click="requestAnother"
       >
         Request another link
@@ -134,7 +134,7 @@ async function confirmEmailAndSignIn(): Promise<void> {
       >
       <button
         type="submit"
-        class="small-btn positive"
+        class="pill-btn"
       >
         Send sign-in link
       </button>
@@ -160,7 +160,7 @@ async function confirmEmailAndSignIn(): Promise<void> {
       >
       <button
         type="submit"
-        class="small-btn positive"
+        class="pill-btn"
       >
         Continue
       </button>
@@ -175,10 +175,5 @@ async function confirmEmailAndSignIn(): Promise<void> {
   align-items: center;
   gap: 12px;
   width: min(100%, 20rem);
-}
-
-.panel .small-btn {
-  min-height: 2.75rem;
-  padding: 0 20px;
 }
 </style>

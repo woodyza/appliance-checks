@@ -775,6 +775,27 @@ header {
   border-color: var(--no);
 }
 
+/* The landing pages' actions, shared by links and buttons */
+.pill-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 10px 22px;
+  background: var(--surface2);
+  border: 1px solid #4a5180;
+  border-radius: 999px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.pill-btn:hover {
+  border-color: var(--accent);
+}
+
 /* A form's submit on the left and, when there is one, its destructive action on the right */
 .form-actions {
   display: flex;
