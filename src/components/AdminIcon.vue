@@ -1,14 +1,16 @@
 <script setup lang="ts">
 // Icons from Tabler Icons (MIT): https://tabler.io/icons
-defineProps<{ name: 'menu' | 'users' | 'building' | 'firetruck' }>()
+withDefaults(defineProps<{ name: 'menu' | 'users' | 'building' | 'firetruck' | 'clipboard'; size?: number }>(), {
+  size: 24,
+})
 </script>
 
 <template>
   <svg
     class="admin-icon"
     xmlns="http://www.w3.org/2000/svg"
-    width="24"
-    height="24"
+    :width="size"
+    :height="size"
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
@@ -37,6 +39,11 @@ defineProps<{ name: 'menu' | 'users' | 'building' | 'firetruck' }>()
       <path d="M14 12l1 0" />
       <path d="M14 16l1 0" />
       <path d="M5 21v-16a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v16" />
+    </template>
+    <template v-else-if="name === 'clipboard'">
+      <path d="M9 5h-2a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-12a2 2 0 0 0 -2 -2h-2" />
+      <path d="M9 3m0 2a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v0a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2z" />
+      <path d="M9 14l2 2l4 -4" />
     </template>
     <template v-else>
       <path d="M5 18m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" />

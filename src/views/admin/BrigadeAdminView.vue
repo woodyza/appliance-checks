@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import BrigadeDetailsForm from '../../components/admin/BrigadeDetailsForm.vue'
 import ReportSettingsForm from '../../components/admin/ReportSettingsForm.vue'
 import AdminFrame from '../../components/AdminFrame.vue'
+import AdminIcon from '../../components/AdminIcon.vue'
 import { ApplianceIdTaken, addAppliance, getDraft } from '../../data/checkSheet'
 import {
   type BrigadeSummary,
@@ -361,26 +362,36 @@ async function download(): Promise<void> {
               <span class="appliance-row-status">{{ sheetStatus(appliance) }}</span>
               <span class="appliance-row-actions">
                 <router-link
+                  :to="`/${slug}/admin/${appliance.id}`"
+                  class="small-btn fit-btn positive row-edit"
+                >
+                  Edit
+                </router-link>
+                <router-link
                   v-if="canRunChecks(appliance)"
                   :to="`/${slug}/${appliance.id}`"
-                  class="small-btn fit-btn positive row-checks"
+                  class="small-btn fit-btn row-checks"
+                  aria-label="Checks"
+                  title="Checks"
                 >
-                  Checks
+                  <AdminIcon
+                    name="clipboard"
+                    :size="18"
+                  />
                 </router-link>
                 <button
                   v-else
                   type="button"
-                  class="small-btn positive row-checks"
+                  class="small-btn fit-btn row-checks"
+                  aria-label="Checks"
+                  title="Checks"
                   disabled
                 >
-                  Checks
+                  <AdminIcon
+                    name="clipboard"
+                    :size="18"
+                  />
                 </button>
-                <router-link
-                  :to="`/${slug}/admin/${appliance.id}`"
-                  class="small-btn fit-btn row-edit"
-                >
-                  Edit
-                </router-link>
               </span>
             </div>
 
