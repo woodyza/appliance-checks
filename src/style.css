@@ -837,18 +837,73 @@ header {
   width: 100%;
   max-width: 36rem;
 }
-/* Each email in the Reports panel is its own block, so neither address reads as shared */
+/* Each email in the Details panel is its own block, so neither address reads as shared */
 .report-settings {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 .report-block,
-.qr-block {
+.qr-text {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+.report-block,
+.qr-block {
   margin-top: 20px;
+}
+.qr-block {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.qr-block .block-note {
+  margin-bottom: 0;
+}
+/* A field with its toggle or action right beside it; on desktop the field's 28rem cap keeps them together */
+.inline-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.inline-row > :is(.item-input, .item-select) {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.inline-row > .checkbox-row,
+.inline-row > .fit-btn,
+.qr-block > .fit-btn {
+  flex: none;
+  align-self: center;
+}
+.qr-block > .fit-btn {
+  margin-left: auto;
+}
+/* Appliance, Month and Download on one line; on a phone Download wraps under them, still on the right */
+.tool-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+.tool-field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.appliance-field {
+  flex: 1 1 10rem;
+  max-width: 20rem;
+}
+.tool-field .month-select {
+  width: auto;
+}
+/* Centred on the 2.75rem selects beside it */
+.tool-row > .fit-btn {
+  align-self: flex-end;
+  margin-bottom: 0.25rem;
+  margin-left: auto;
 }
 .block-title {
   margin: 0;
@@ -873,6 +928,9 @@ header {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+.brigade-details > .save-brigade {
+  margin-top: 14px;
 }
 
 .field-error {

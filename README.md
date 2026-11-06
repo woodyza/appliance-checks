@@ -43,7 +43,15 @@ make dev
 Runs the Firestore and Auth emulators, a dev seed and Vite in one terminal (via `concurrently`); Ctrl-C stops them all. Vite serves at `http://localhost:5173` (it stops with an error rather than moving to another port if that one is busy) and talks to the emulator (`.env.development`, committed, points at the `demo-appliance-checks` project). There's no local mode that talks to `dev`/`prod`.
 
 - The seed creates a `devtst` brigade the first time (appliances `dev1` and `dev2`, a small Check Sheet and a previous Check to copy from) and prints its links: open `http://localhost:5173/devtst/dev1`. After that it leaves the data alone; `npm run dev:seed -- --reset` rebuilds it while `make dev` is running.
-- The seed also creates the emulator's superadmin Auth user (`e2e-admin@example.com`, UID `emulator-superadmin`, matching `firestore.rules`). See the local sign-in steps below.
+- The seed also creates a login for each role and prints them with the sign-in URL:
+
+  | Role | Email |
+  |---|---|
+  | Superadmin | `e2e-admin@example.com` (UID `emulator-superadmin`, matching `firestore.rules`) |
+  | VSO | `dev-vso@example.com` (`devtst`) |
+  | Brigade Admin | `dev-brigade-admin@example.com` (`devtst`) |
+
+  They're rewritten when `devtst` is (re)seeded, and created if missing otherwise. See the local sign-in steps below.
 - Emulator data is exported to `.emulator-data/` (gitignored) on exit and imported on the next start, so your Checks survive restarts. Delete the directory to start from nothing.
 - The Emulator UI (http://127.0.0.1:4000) shows the data.
 - `make e2e` reuses a running `make dev` (the e2e seed only touches its own `e2etst` brigade). `make check` needs port 8080 free, so stop `make dev` first.
@@ -51,7 +59,7 @@ Runs the Firestore and Auth emulators, a dev seed and Vite in one terminal (via 
 To sign in locally while `make dev` is running:
 
 1. Open http://localhost:5173/admin/sign-in.
-2. Enter `e2e-admin@example.com` and click **Send sign-in link**.
+2. Enter one of the seeded emails above and click **Send sign-in link**.
 3. Open the generated link from the emulator output in your `make dev` terminal, using the same browser.
 
 There's no password and no real email is sent locally.
@@ -76,7 +84,10 @@ The landing page's "Admin" link goes to `/admin` and relies on that redirect. An
 
 - `/admin/users` lists Brigade Admins and VSOs, with "+ New user" (`/admin/users/new`); tapping one opens `/admin/users/:email` to edit or remove them.
 - `/admin/brigades` lists brigades, each opening its `/:slug/admin`; the superadmin also gets "+ New brigade" (`/admin/brigades/new`).
-- `/:slug/admin` has three sections. Details edits the brigade's name and Check Day, and, for a VSO or the superadmin, its Weekly VSO Email address and whether that email is sent; only the superadmin can deactivate a brigade, and nothing deletes one. It also downloads a printable PDF with the Brigade Link's QR code. Appliances lists its appliances (including inactive ones), each with "Checks" (its check entry, disabled when that can't run) and "Edit", plus a "+ Add appliance" row. Reports has the Monthly Report picker and PDF download.
+- `/:slug/admin` has three sections:
+  - Details edits the brigade's name, Check Day and Monthly Report Email address, and, for a VSO or the superadmin, its Weekly VSO Email address. Each email has an Enabled toggle, and one Save writes them all together. Only the superadmin can deactivate a brigade, and nothing deletes one.
+  - Appliances lists its appliances (including inactive ones), each with "Checks" (its check entry, disabled when that can't run) and "Edit", plus a "+ Add appliance" row.
+  - Tools downloads a Monthly Report PDF (pick the appliance and month) and a printable PDF with the Brigade Link's QR code.
 - `/:slug/admin/:applianceId` edits one appliance: its Callsign, Active toggle and Check Sheet. Edits to the Check Sheet save to a Draft as you go; a banner summarises what changed, and Publish makes the Draft the Check Sheet that Checks use (or Discard throws it away). You can also copy another appliance's Check Sheet, or import a public Google Sheet (paste its link) from there. Importing in the browser needs `VITE_SHEETS_API_KEY`; see Local dev.
 
 The CLI's `create-brigade`, `brigade-settings`, `add-appliance` and `import-check-sheet` (below) still work as alternatives. Each admin screen's left header button goes up to its parent, and Sign out is on the person's admin home. The screens work out who you are in `src/state/auth.ts` (`adminProfile()`: your own `adminUsers` doc, or superadmin by UID) and gate on that in `src/state/adminGate.ts`; `firestore.rules` is still what actually enforces access. The browser needs `VITE_SUPERADMIN_UID` to recognise the superadmin: `.env.development` sets the emulator's, and `make deploy` passes the UID stored in Firestore (`deployConfig/superadmin`, set with `npm run cli:set-superadmin -- --project dev|prod --email <addr>`) to the build. `src/state/auth.ts` wraps Firebase Auth; `src/data/admin.ts` reads and writes brigades, their settings and admin users, and reads a month's Checks; `src/report/pdf.ts` renders the Monthly Report PDF (jsPDF + jspdf-autotable, lazy-loaded) and `src/report/qrPdf.ts` the QR code PDF (jsPDF + qrcode-generator, lazy-loaded).

@@ -32,12 +32,16 @@ test('the superadmin creates, edits and deactivates a brigade', async ({ page })
 
   await page.locator('.brigade-name').fill(`${name} Renamed`)
   await page.locator('.brigade-active').uncheck()
+  await page.locator('.monthly-report-email').fill('created@example.com')
+  await page.locator('.monthly-report-enabled').check()
   await page.locator('.save-brigade').click()
   await expect(page.locator('#toast')).toContainText('Saved')
 
   await page.reload()
   await expect(page.locator('.header-callsign')).toHaveText(`${name} Renamed`)
   await expect(page.locator('.brigade-active')).not.toBeChecked()
+  await expect(page.locator('.monthly-report-enabled')).toBeChecked()
+  await expect(page.locator('.monthly-report-email')).toHaveValue('created@example.com')
 
   await page.locator('.header-up', { hasText: '‹ Brigades' }).click()
   await expect(page).toHaveURL('/admin/brigades')
@@ -53,13 +57,8 @@ test("a Brigade Admin saves their brigade's details and email settings without t
   await expect(page.locator('.report-email')).toHaveCount(0)
   await expect(page.locator('.weekly-email')).toHaveCount(0)
 
-  await page.locator('.save-brigade').click()
-  await expect(page.locator('#toast')).toContainText('Saved')
-
-  // Reloaded so the first save's toast can't stand in for the second's.
-  await page.reload()
   // Would be refused if the save also wrote the weekly settings, which a Brigade Admin can't.
-  await page.locator('.save-reports').click()
+  await page.locator('.save-brigade').click()
   await expect(page.locator('#toast')).toContainText('Saved')
 
   await page.locator('.appliance-row', { hasText: 'E2E 1' }).locator('.row-checks').click()
@@ -73,7 +72,7 @@ test("a VSO sets their brigade's Report Email", async ({ page }) => {
 
   await page.locator('.report-email').fill('e2e-team@example.com')
   await page.locator('.weekly-email').uncheck()
-  await page.locator('.save-reports').click()
+  await page.locator('.save-brigade').click()
   await expect(page.locator('#toast')).toContainText('Saved')
 
   await page.reload()
@@ -87,11 +86,11 @@ test("a Brigade Admin sets their brigade's Monthly Report email", async ({ page 
 
   await page.locator('.monthly-report-enabled').check()
   await page.locator('.monthly-report-email').fill('')
-  await page.locator('.save-reports').click()
+  await page.locator('.save-brigade').click()
   await expect(page.locator('.error-msg')).toHaveText('Add an address to email the Monthly Reports.')
 
   await page.locator('.monthly-report-email').fill('  Reports@Example.com ')
-  await page.locator('.save-reports').click()
+  await page.locator('.save-brigade').click()
   await expect(page.locator('#toast')).toContainText('Saved')
 
   await page.reload()

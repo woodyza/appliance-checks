@@ -2,7 +2,6 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import BrigadeDetailsForm from '../../components/admin/BrigadeDetailsForm.vue'
-import ReportSettingsForm from '../../components/admin/ReportSettingsForm.vue'
 import AdminFrame from '../../components/AdminFrame.vue'
 import AdminIcon from '../../components/AdminIcon.vue'
 import { ApplianceIdTaken, addAppliance, getDraft } from '../../data/checkSheet'
@@ -12,7 +11,6 @@ import {
   getMonthlyReportSettings,
   listChecksInMonth,
   updateBrigade,
-  updateReportSettings,
 } from '../../data/admin'
 import { type ApplianceSummary, getVersion } from '../../data/checks'
 import { canManageBrigadeSettings, hasBrigadeList } from '../../domain/adminProfile'
@@ -64,14 +62,13 @@ const crumbs = computed(() => [
 ])
 
 const details = ref<BrigadeDraft | null>(null)
+const reportSettings = ref<ReportSettingsDraft | null>(null)
+const reportSettingsError = ref<string | null>(null)
 // Bumped on each save so the form re-reads the normalised values.
 const detailsVersion = ref(0)
 const savingDetails = ref(false)
-const reportSettings = ref<ReportSettingsDraft | null>(null)
-// Bumped on each save so the form re-reads the normalised values.
-const reportSettingsVersion = ref(0)
-const reportSettingsError = ref<string | null>(null)
-const savingReportSettings = ref(false)
+// Held back until the email settings settle, so a Save can't go before their fields arrive.
+const emailsSettled = computed(() => reportSettings.value !== null || reportSettingsError.value !== null)
 const activeMode = computed(() => (gate.profile.value?.kind === 'superadmin' ? 'editable' : 'readonly'))
 const showSettings = computed(() => gate.profile.value !== null && canManageBrigadeSettings(gate.profile.value))
 const invalidLink = computed(
@@ -142,16 +139,23 @@ async function loadReportSettings(): Promise<void> {
   }
 }
 
-async function saveDetails(fields: NormalisedBrigade): Promise<void> {
+async function saveDetails(fields: NormalisedBrigade, settings: NormalisedReportSettings | null): Promise<void> {
   const summary = brigadeSummary.value
   if (!summary) return
   savingDetails.value = true
   try {
     const canChangeActive = activeMode.value === 'editable'
-    await updateBrigade(slug, fields, canChangeActive)
+    await updateBrigade(slug, fields, canChangeActive, settings && { settings, includeWeekly: showSettings.value })
     const active = canChangeActive ? fields.active : summary.brigade.active
     gate.data.value = { slug, brigade: { ...summary.brigade, name: fields.name, checkDay: fields.checkDay, active } }
     details.value = { ...fields, active }
+    if (settings) {
+      reportSettings.value = {
+        ...settings,
+        reportEmail: settings.reportEmail ?? '',
+        monthlyReportEmail: settings.monthlyReportEmail ?? '',
+      }
+    }
     detailsVersion.value++
     showToast('Saved', false)
   } catch (err) {
@@ -159,25 +163,6 @@ async function saveDetails(fields: NormalisedBrigade): Promise<void> {
     showToast(isPermissionDenied(err) ? 'Not authorised.' : "Couldn't save", true)
   } finally {
     savingDetails.value = false
-  }
-}
-
-async function saveReportSettings(settings: NormalisedReportSettings): Promise<void> {
-  savingReportSettings.value = true
-  try {
-    await updateReportSettings(slug, settings, showSettings.value)
-    reportSettings.value = {
-      ...settings,
-      reportEmail: settings.reportEmail ?? '',
-      monthlyReportEmail: settings.monthlyReportEmail ?? '',
-    }
-    reportSettingsVersion.value++
-    showToast('Saved', false)
-  } catch (err) {
-    console.error(err)
-    showToast(isPermissionDenied(err) ? 'Not authorised.' : "Couldn't save", true)
-  } finally {
-    savingReportSettings.value = false
   }
 }
 
@@ -321,29 +306,17 @@ async function download(): Promise<void> {
             Details
           </h2>
           <BrigadeDetailsForm
-            v-if="details"
+            v-if="details && emailsSettled"
             :key="detailsVersion"
             :initial="details"
             :active="activeMode"
             submit-label="Save"
             :saving="savingDetails"
+            :report-settings="reportSettings ?? undefined"
+            :report-settings-error="reportSettingsError ?? undefined"
+            :show-weekly="showSettings"
             @save="saveDetails"
           />
-          <div class="qr-block">
-            <h3 class="block-title">
-              QR code
-            </h3>
-            <p class="block-note">
-              Print this and put it up where Checks start, e.g. the engine bay.
-            </p>
-            <button
-              class="small-btn fit-btn positive download-qr"
-              :disabled="preparingQr || !brigadeSummary"
-              @click="downloadQr"
-            >
-              {{ preparingQr ? 'Preparing…' : 'Download PDF' }}
-            </button>
-          </div>
         </section>
 
         <section class="admin-panel">
@@ -456,43 +429,50 @@ async function download(): Promise<void> {
 
         <section class="admin-panel">
           <h2 class="panel-title">
-            Reports
+            Tools
           </h2>
           <h3 class="block-title">
             Download a Monthly Report
           </h3>
-          <div class="picker-heading">
-            Appliance
-          </div>
-          <select
-            v-model="selectedApplianceId"
-            class="item-select appliance-select"
-          >
-            <option
-              v-for="appliance in appliances"
-              :key="appliance.id"
-              :value="appliance.id"
+          <div class="tool-row">
+            <label class="tool-field appliance-field">
+              <span class="picker-heading">Appliance</span>
+              <select
+                v-model="selectedApplianceId"
+                class="item-select appliance-select"
+              >
+                <option
+                  v-for="appliance in appliances"
+                  :key="appliance.id"
+                  :value="appliance.id"
+                >
+                  {{ appliance.callsign }}{{ appliance.active ? '' : ' (inactive)' }}
+                </option>
+              </select>
+            </label>
+            <label class="tool-field">
+              <span class="picker-heading">Month</span>
+              <select
+                v-model="selectedMonth"
+                class="item-select month-select"
+              >
+                <option
+                  v-for="month in months"
+                  :key="month"
+                  :value="month"
+                >
+                  {{ month }}
+                </option>
+              </select>
+            </label>
+            <button
+              class="small-btn fit-btn positive download-btn"
+              :disabled="!canDownload"
+              @click="download"
             >
-              {{ appliance.callsign }}{{ appliance.active ? '' : ' (inactive)' }}
-            </option>
-          </select>
-
-          <div class="picker-heading">
-            Month
+              {{ downloading ? 'Preparing…' : 'Download' }}
+            </button>
           </div>
-          <select
-            v-model="selectedMonth"
-            class="item-select month-select"
-          >
-            <option
-              v-for="month in months"
-              :key="month"
-              :value="month"
-            >
-              {{ month }}
-            </option>
-          </select>
-
           <p
             v-if="noCheckSheet"
             class="error-msg no-check-sheet"
@@ -500,28 +480,23 @@ async function download(): Promise<void> {
             No Check Sheet yet.
           </p>
 
-          <button
-            class="small-btn fit-btn positive download-btn"
-            :disabled="!canDownload"
-            @click="download"
-          >
-            {{ downloading ? 'Preparing…' : 'Download' }}
-          </button>
-
-          <ReportSettingsForm
-            v-if="reportSettings"
-            :key="reportSettingsVersion"
-            :initial="reportSettings"
-            :show-weekly="showSettings"
-            :saving="savingReportSettings"
-            @save="saveReportSettings"
-          />
-          <p
-            v-else-if="reportSettingsError"
-            class="error-msg"
-          >
-            {{ reportSettingsError }}
-          </p>
+          <div class="qr-block">
+            <div class="qr-text">
+              <h3 class="block-title">
+                QR code
+              </h3>
+              <p class="block-note">
+                Print this and put it up where Checks start, e.g. the engine bay.
+              </p>
+            </div>
+            <button
+              class="small-btn fit-btn positive download-qr"
+              :disabled="preparingQr || !brigadeSummary"
+              @click="downloadQr"
+            >
+              {{ preparingQr ? 'Preparing…' : 'Download' }}
+            </button>
+          </div>
         </section>
       </div>
     </main>

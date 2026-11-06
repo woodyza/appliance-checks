@@ -153,32 +153,41 @@ export async function createBrigade(fields: NormalisedBrigade): Promise<string> 
   throw new Error(`Could not generate a unique brigade slug after ${String(SLUG_ATTEMPTS)} attempts.`)
 }
 
-/** The rules let only the superadmin change `active`. */
-export async function updateBrigade(slug: string, fields: NormalisedBrigade, canChangeActive: boolean): Promise<void> {
-  await updateDoc(doc(db, 'brigades', slug), {
+export interface ReportSettingsWrite {
+  settings: NormalisedReportSettings
+  includeWeekly: boolean
+}
+
+/**
+ * One batch, so a refused write saves nothing. The rules let only the superadmin change `active`,
+ * and keep the weekly settings to the brigade's VSOs; any admin of it sets the Monthly Report email.
+ * `reportSettings` is null when they couldn't be loaded, so defaults never overwrite them.
+ */
+export async function updateBrigade(
+  slug: string,
+  fields: NormalisedBrigade,
+  canChangeActive: boolean,
+  reportSettings: ReportSettingsWrite | null,
+): Promise<void> {
+  const batch = writeBatch(db)
+  batch.update(doc(db, 'brigades', slug), {
     name: fields.name,
     checkDay: fields.checkDay,
     ...(canChangeActive ? { active: fields.active } : {}),
   })
-}
-
-/** Any admin of the brigade can change its Monthly Report email; the rules keep the weekly settings to its VSOs. */
-export async function updateReportSettings(
-  slug: string,
-  settings: NormalisedReportSettings,
-  includeWeekly: boolean,
-): Promise<void> {
-  const batch = writeBatch(db)
-  batch.set(monthlyReportRef(slug), {
-    enabled: settings.monthlyReportEnabled,
-    email: settings.monthlyReportEmail ?? '',
-  })
-  if (includeWeekly) {
-    batch.set(
-      settingsRef(slug),
-      { reportEmail: settings.reportEmail ?? deleteField(), weeklyEmail: settings.weeklyEmail },
-      { merge: true },
-    )
+  if (reportSettings) {
+    const { settings, includeWeekly } = reportSettings
+    batch.set(monthlyReportRef(slug), {
+      enabled: settings.monthlyReportEnabled,
+      email: settings.monthlyReportEmail ?? '',
+    })
+    if (includeWeekly) {
+      batch.set(
+        settingsRef(slug),
+        { reportEmail: settings.reportEmail ?? deleteField(), weeklyEmail: settings.weeklyEmail },
+        { merge: true },
+      )
+    }
   }
   await batch.commit()
 }

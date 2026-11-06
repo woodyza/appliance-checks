@@ -1,25 +1,49 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
-import { type BrigadeDraft, CHECK_DAYS, type NormalisedBrigade, normaliseBrigade } from '../../domain/brigade'
+import {
+  type BrigadeDraft,
+  CHECK_DAYS,
+  type NormalisedBrigade,
+  type NormalisedReportSettings,
+  normaliseBrigade,
+  normaliseReportSettings,
+  type ReportSettingsDraft,
+} from '../../domain/brigade'
+import ReportSettingsFields from './ReportSettingsFields.vue'
 
 // `active` is 'hidden' on create (a new brigade is always active), and 'readonly' for anyone but
-// the superadmin.
+// the superadmin. Without `reportSettings` there are no email fields, and the save emits null for
+// them, so settings that failed to load are never overwritten.
 const props = defineProps<{
   initial: BrigadeDraft
   active: 'hidden' | 'editable' | 'readonly'
   submitLabel: string
   saving: boolean
+  reportSettings?: ReportSettingsDraft
+  reportSettingsError?: string
+  showWeekly?: boolean
 }>()
 
-const emit = defineEmits<{ save: [brigade: NormalisedBrigade] }>()
+const emit = defineEmits<{ save: [brigade: NormalisedBrigade, reportSettings: NormalisedReportSettings | null] }>()
 
 const draft = reactive<BrigadeDraft>({ ...props.initial })
+const reportDraft = ref<ReportSettingsDraft | null>(props.reportSettings ? { ...props.reportSettings } : null)
 const problem = ref<string | null>(null)
 
 function submit(): void {
-  const result = normaliseBrigade(draft)
-  problem.value = result.ok ? null : result.problem
-  if (result.ok) emit('save', result.brigade)
+  const brigade = normaliseBrigade(draft)
+  if (!brigade.ok) {
+    problem.value = brigade.problem
+    return
+  }
+  if (reportDraft.value === null) {
+    problem.value = null
+    emit('save', brigade.brigade, null)
+    return
+  }
+  const reports = normaliseReportSettings(reportDraft.value)
+  problem.value = reports.ok ? null : reports.problem
+  if (reports.ok) emit('save', brigade.brigade, reports.settings)
 }
 </script>
 
@@ -79,6 +103,18 @@ function submit(): void {
       </div>
     </template>
 
+    <ReportSettingsFields
+      v-if="reportDraft"
+      v-model="reportDraft"
+      :show-weekly="props.showWeekly === true"
+    />
+    <p
+      v-else-if="props.reportSettingsError"
+      class="error-msg"
+    >
+      {{ props.reportSettingsError }}
+    </p>
+
     <p
       v-if="problem"
       class="error-msg"
@@ -88,7 +124,7 @@ function submit(): void {
 
     <button
       type="submit"
-      class="small-btn fit-btn positive save-brigade"
+      class="small-btn fit-btn primary save-brigade"
       :disabled="props.saving"
     >
       {{ props.submitLabel }}
