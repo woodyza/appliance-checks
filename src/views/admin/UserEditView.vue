@@ -16,6 +16,8 @@ const router = useRouter()
 // Null on `/admin/users/new`.
 const editingEmail = typeof route.params.email === 'string' ? route.params.email : null
 
+const crumbs = [{ label: 'Users', to: '/admin/users' }, { label: editingEmail ?? 'New user' }]
+
 const draft = reactive<AdminUserDraft>({ email: '', displayName: '', role: 'brigadeAdmin', brigadeIds: [] })
 
 const gate = useAdminGate(
@@ -119,6 +121,7 @@ async function remove(): Promise<void> {
   <AdminFrame
     :title="editingEmail === null ? 'New user' : 'Edit user'"
     :up="{ to: '/admin/users', label: '‹ Users' }"
+    :crumbs="crumbs"
     :loading="gate.loading.value"
     :not-authorised="gate.notAuthorised.value"
     :error="frameError"

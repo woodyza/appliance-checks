@@ -37,6 +37,7 @@ async function save(brigade: NormalisedBrigade): Promise<void> {
   <AdminFrame
     title="New brigade"
     :up="{ to: '/admin/brigades', label: '‹ Brigades' }"
+    :crumbs="[{ label: 'Brigades', to: '/admin/brigades' }, { label: 'New brigade' }]"
     :loading="gate.loading.value"
     :not-authorised="gate.notAuthorised.value"
     :error="gate.error.value"

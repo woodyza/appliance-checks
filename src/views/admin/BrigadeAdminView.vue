@@ -4,7 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import BrigadeDetailsForm from '../../components/admin/BrigadeDetailsForm.vue'
 import ReportSettingsForm from '../../components/admin/ReportSettingsForm.vue'
 import AdminFrame from '../../components/AdminFrame.vue'
-import { ApplianceIdTaken, addAppliance, getDraft, listAllAppliances } from '../../data/checkSheet'
+import AdminIcon from '../../components/AdminIcon.vue'
+import { ApplianceIdTaken, addAppliance, getDraft } from '../../data/checkSheet'
 import {
   type BrigadeSummary,
   getBrigadeSettings,
@@ -22,6 +23,7 @@ import { recentMonths, today } from '../../domain/schedule'
 import type { BrigadeSettings, CheckSheetVersion } from '../../domain/types'
 import { wantsWeeklyEmail } from '../../domain/weeklyEmail'
 import { isPermissionDenied, loadBrigadeForAdmin, useAdminGate } from '../../state/adminGate'
+import { addNavAppliance, loadNavAppliances } from '../../state/navAppliances'
 
 interface Toast {
   text: string
@@ -47,14 +49,19 @@ const preparingQr = ref(false)
 const toast = ref<Toast | null>(null)
 
 const brigadeSummary = computed(() => gate.data.value)
-const showSignOut = computed(() => {
+const home = computed(() => {
   const profile = gate.profile.value
   return profile?.kind === 'admin' && profile.role === 'brigadeAdmin' && profile.homeSlug === slug
 })
+const brigadeName = computed(() => brigadeSummary.value?.brigade.name ?? 'Brigade admin')
+const frameBrigade = computed(() => (brigadeSummary.value ? { slug, name: brigadeName.value } : undefined))
+const hasList = computed(() => gate.profile.value !== null && hasBrigadeList(gate.profile.value))
 // A Brigade Admin has no brigade list to go up to; this page is their admin home.
-const up = computed(() =>
-  gate.profile.value && hasBrigadeList(gate.profile.value) ? { to: '/admin/brigades', label: '‹ Brigades' } : undefined,
-)
+const up = computed(() => (hasList.value ? { to: '/admin/brigades', label: '‹ Brigades' } : undefined))
+const crumbs = computed(() => [
+  ...(hasList.value ? [{ label: 'Brigades', to: '/admin/brigades' }] : []),
+  { label: brigadeName.value },
+])
 
 const details = ref<BrigadeDraft | null>(null)
 // Bumped on each save so the form re-reads the normalised values.
@@ -181,7 +188,7 @@ watch(
     loadDetails(brigadeSummary.value)
     void loadReportSettings()
     try {
-      appliances.value = await listAllAppliances(slug)
+      appliances.value = await loadNavAppliances(slug)
       selectedApplianceId.value = appliances.value[0]?.id ?? null
       await loadDrafts(appliances.value)
     } catch (err) {
@@ -227,7 +234,9 @@ async function saveNew(): Promise<void> {
   saving.value = true
   idTaken.value = false
   try {
-    await addAppliance(slug, newId.value, newCallsign.value.trim())
+    const callsign = newCallsign.value.trim()
+    await addAppliance(slug, newId.value, callsign)
+    addNavAppliance(slug, { id: newId.value, callsign, active: true, currentCheckSheetVersion: null })
     await router.push(`/${slug}/admin/${newId.value}`)
   } catch (err) {
     if (err instanceof ApplianceIdTaken) {
@@ -296,16 +305,18 @@ async function download(): Promise<void> {
 
 <template>
   <AdminFrame
-    :title="brigadeSummary?.brigade.name ?? 'Brigade admin'"
+    :title="brigadeName"
     :up="up"
-    :show-sign-out="showSignOut"
+    :home="home"
+    :crumbs="crumbs"
+    :brigade="frameBrigade"
     :loading="gate.loading.value"
     :not-authorised="gate.notAuthorised.value"
     :error="frameError"
   >
     <main class="admin-page">
-      <div class="admin-columns brigade-admin">
-        <section class="admin-panel details-panel">
+      <div class="admin-stack">
+        <section class="admin-panel">
           <h2 class="panel-title">
             Details
           </h2>
@@ -335,7 +346,7 @@ async function download(): Promise<void> {
           </div>
         </section>
 
-        <section class="admin-panel appliances-panel">
+        <section class="admin-panel">
           <h2 class="panel-title">
             Appliances
           </h2>
@@ -351,26 +362,36 @@ async function download(): Promise<void> {
               <span class="appliance-row-status">{{ sheetStatus(appliance) }}</span>
               <span class="appliance-row-actions">
                 <router-link
+                  :to="`/${slug}/admin/${appliance.id}`"
+                  class="small-btn fit-btn positive row-edit"
+                >
+                  Edit
+                </router-link>
+                <router-link
                   v-if="canRunChecks(appliance)"
                   :to="`/${slug}/${appliance.id}`"
-                  class="small-btn fit-btn positive row-checks"
+                  class="small-btn fit-btn row-checks"
+                  aria-label="Checks"
+                  title="Checks"
                 >
-                  Checks
+                  <AdminIcon
+                    name="clipboard"
+                    :size="18"
+                  />
                 </router-link>
                 <button
                   v-else
                   type="button"
-                  class="small-btn positive row-checks"
+                  class="small-btn fit-btn row-checks"
+                  aria-label="Checks"
+                  title="Checks"
                   disabled
                 >
-                  Checks
+                  <AdminIcon
+                    name="clipboard"
+                    :size="18"
+                  />
                 </button>
-                <router-link
-                  :to="`/${slug}/admin/${appliance.id}`"
-                  class="small-btn fit-btn row-edit"
-                >
-                  Edit
-                </router-link>
               </span>
             </div>
 
@@ -433,7 +454,7 @@ async function download(): Promise<void> {
           </button>
         </section>
 
-        <section class="admin-panel reports-panel">
+        <section class="admin-panel">
           <h2 class="panel-title">
             Reports
           </h2>

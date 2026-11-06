@@ -30,6 +30,7 @@ function brigadeNames(ids: string[]): string {
   <AdminFrame
     title="Users"
     :up="{ to: '/admin', label: '‹ Admin' }"
+    :crumbs="[{ label: 'Users' }]"
     :loading="gate.loading.value"
     :not-authorised="gate.notAuthorised.value"
     :error="gate.error.value"

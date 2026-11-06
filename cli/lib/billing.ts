@@ -1,4 +1,4 @@
-import { capture } from './shell'
+import { type Captured, capture } from './shell'
 
 export interface KillSwitchBudget {
   name: string
@@ -6,8 +6,17 @@ export interface KillSwitchBudget {
   budgetFilter?: { projects?: string[] }
 }
 
+// `--billing-project` makes the project itself the quota project. Without it, gcloud's user
+// credentials fall back to the Cloud SDK's own project, whose Cloud Billing quota every gcloud
+// user shares, so the call fails with RESOURCE_EXHAUSTED at random.
+function describeBilling(projectId: string, field: string): Captured {
+  return capture('gcloud', [
+    'billing', 'projects', 'describe', projectId, `--billing-project=${projectId}`, `--format=value(${field})`,
+  ])
+}
+
 export function billingEnabled(projectId: string): boolean {
-  const described = capture('gcloud', ['billing', 'projects', 'describe', projectId, '--format=value(billingEnabled)'])
+  const described = describeBilling(projectId, 'billingEnabled')
   if (!described.ok) {
     throw new Error(`Could not read the billing status of ${projectId}: ${described.stderr || described.stdout}`)
   }
@@ -16,7 +25,7 @@ export function billingEnabled(projectId: string): boolean {
 
 // `billingAccounts/<id>`, for a project with billing enabled.
 export function billingAccount(projectId: string): string {
-  const described = capture('gcloud', ['billing', 'projects', 'describe', projectId, '--format=value(billingAccountName)'])
+  const described = describeBilling(projectId, 'billingAccountName')
   if (!described.ok || !described.stdout) {
     throw new Error(`Could not read the billing account of ${projectId}: ${described.stderr || described.stdout}`)
   }

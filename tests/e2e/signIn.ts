@@ -47,4 +47,5 @@ export async function signIn(page: Page, email: string): Promise<void> {
   await expect(page.locator('.picker-heading')).toHaveText('Check your inbox')
 
   await page.goto(await latestSignInLink(email))
+  await page.waitForURL((url) => url.pathname !== '/admin/sign-in')
 }
