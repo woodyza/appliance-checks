@@ -12,6 +12,7 @@ import { getAdminUser, listBrigadesById } from '../data/admin'
 import { type AdminProfile, adminHomePath } from '../domain/adminProfile'
 import type { AdminUser } from '../domain/types'
 import { auth } from '../firebase'
+import { clearNavAppliances } from './navAppliances'
 import { isPermissionDenied } from './permissionDenied'
 
 const STORED_EMAIL_KEY = 'admin-sign-in-email'
@@ -32,12 +33,14 @@ let readySettled = false
 
 let cachedProfile: { uid: string; profile: Promise<AdminProfile> } | null = null
 
-function clearProfileCacheUnless(uid: string | undefined): void {
+// Runs before `currentUser` changes, so it can tell a different person signing in.
+function clearCachesUnless(uid: string | undefined): void {
   if (cachedProfile && cachedProfile.uid !== uid) cachedProfile = null
+  if (currentUser.value?.uid !== uid) clearNavAppliances()
 }
 
 onAuthStateChanged(auth, (user) => {
-  clearProfileCacheUnless(user?.uid)
+  clearCachesUnless(user?.uid)
   currentUser.value = user
   if (!readySettled) {
     readySettled = true
@@ -80,7 +83,7 @@ export function clearStoredEmail(): void {
 // doesn't race the auth guard there.
 export async function completeSignIn(email: string, url: string): Promise<User> {
   const credential = await signInWithEmailLink(auth, email, url)
-  clearProfileCacheUnless(credential.user.uid)
+  clearCachesUnless(credential.user.uid)
   currentUser.value = credential.user
   clearStoredEmail()
   return credential.user
@@ -91,6 +94,7 @@ export async function completeSignIn(email: string, url: string): Promise<User> 
 export async function signOut(): Promise<void> {
   await firebaseSignOut(auth)
   cachedProfile = null
+  clearNavAppliances()
   currentUser.value = null
 }
 

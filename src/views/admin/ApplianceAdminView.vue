@@ -8,12 +8,14 @@ import SheetSectionTable from '../../components/admin/SheetSectionTable.vue'
 import SheetTextCell from '../../components/admin/SheetTextCell.vue'
 import { listAllAppliances, updateAppliance } from '../../data/checkSheet'
 import { type ApplianceSummary, getVersion } from '../../data/checks'
+import { hasBrigadeList } from '../../domain/adminProfile'
 import { callsignProblem } from '../../domain/appliance'
 import { parseSpreadsheetId, importPrefill } from '../../domain/import/source'
 import { summary } from '../../domain/sheetDiff'
 import { allIds, type DraftOp, uniqueId } from '../../domain/sheetDraft'
 import type { Item, Section } from '../../domain/types'
 import { isPermissionDenied, listBrigadesFor, loadBrigadeForAdmin, NOT_AUTHORISED, useAdminGate } from '../../state/adminGate'
+import { patchNavAppliance } from '../../state/navAppliances'
 import { useSheetEditor } from '../../state/sheetEditor'
 
 const route = useRoute()
@@ -45,6 +47,14 @@ watch(
 )
 
 const callsign = computed(() => editor.appliance.value?.callsign ?? 'Appliance')
+const frameBrigade = computed(() =>
+  brigadeSummary.value ? { slug, name: brigadeSummary.value.brigade.name } : undefined,
+)
+const crumbs = computed(() => [
+  ...(gate.profile.value && hasBrigadeList(gate.profile.value) ? [{ label: 'Brigades', to: '/admin/brigades' }] : []),
+  { label: brigadeSummary.value?.brigade.name ?? 'Brigade admin', to: `/${slug}/admin` },
+  { label: callsign.value },
+])
 const callsignMessage = ref<string | null>(null)
 const removedExpanded = ref(false)
 
@@ -68,6 +78,7 @@ async function commitCallsign(value: string): Promise<void> {
   try {
     await updateAppliance(slug, applianceId, { callsign: value })
     editor.appliance.value = { ...editor.appliance.value, callsign: value }
+    patchNavAppliance(slug, applianceId, { callsign: value })
   } catch (err) {
     console.error(err)
     editor.showToast("Couldn't save", true)
@@ -92,6 +103,7 @@ async function onActiveChange(event: Event): Promise<void> {
   try {
     await updateAppliance(slug, applianceId, { active })
     editor.appliance.value = { ...appliance, active }
+    patchNavAppliance(slug, applianceId, { active })
   } catch (err) {
     console.error(err)
     box.checked = !active
@@ -215,6 +227,9 @@ async function importFromSheet(): Promise<void> {
   <AdminFrame
     :title="callsign"
     :up="{ to: `/${slug}/admin`, label: '‹ Brigade admin' }"
+    :crumbs="crumbs"
+    :brigade="frameBrigade"
+    width="wide"
     :loading="frameLoading"
     :not-authorised="gate.notAuthorised.value"
     :error="frameError"

@@ -11,7 +11,8 @@ const gate = useAdminGate(
 <template>
   <AdminFrame
     title="Admin"
-    show-sign-out
+    home
+    :crumbs="[{ label: 'Admin' }]"
     :loading="gate.loading.value"
     :not-authorised="gate.notAuthorised.value"
     :error="gate.error.value"

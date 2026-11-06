@@ -18,7 +18,8 @@ const isVso = computed(() => gate.profile.value?.kind === 'admin')
   <AdminFrame
     title="Brigades"
     :up="isSuperadmin ? { to: '/admin', label: '‹ Admin' } : undefined"
-    :show-sign-out="isVso"
+    :home="isVso"
+    :crumbs="[{ label: 'Brigades' }]"
     :loading="gate.loading.value"
     :not-authorised="gate.notAuthorised.value"
     :error="gate.error.value"

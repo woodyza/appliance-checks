@@ -9,6 +9,8 @@ test('a Brigade Admin starts at their brigade and moves between its pages', asyn
   await signIn(page, BRIGADE_ADMIN_EMAIL)
   await expect(page).toHaveURL('/e2etst/admin')
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
+  await expect(page.locator('.header-wordmark')).toBeVisible()
+  await expect(page.locator('.header-callsign')).toHaveCount(0)
   await expect(page.locator('.header-up')).toHaveCount(0)
 
   await page.locator('.appliance-row', { hasText: 'E2E 1' }).locator('.row-checks').click()
@@ -39,6 +41,7 @@ test('a VSO starts at a list of their brigades and has no user admin', async ({ 
   await signIn(page, VSO_EMAIL)
   await expect(page).toHaveURL('/admin/brigades')
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
+  await expect(page.locator('.header-wordmark')).toBeVisible()
   await expect(page.locator('.header-up')).toHaveCount(0)
 
   const cards = page.locator('.appliance-card')
