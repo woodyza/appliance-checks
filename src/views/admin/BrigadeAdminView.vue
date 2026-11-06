@@ -317,23 +317,6 @@ async function download(): Promise<void> {
             :show-weekly="showSettings"
             @save="saveDetails"
           />
-          <div class="qr-block">
-            <div class="qr-text">
-              <h3 class="block-title">
-                QR code
-              </h3>
-              <p class="block-note">
-                Print this and put it up where Checks start, e.g. the engine bay.
-              </p>
-            </div>
-            <button
-              class="small-btn fit-btn positive download-qr"
-              :disabled="preparingQr || !brigadeSummary"
-              @click="downloadQr"
-            >
-              {{ preparingQr ? 'Preparing…' : 'Download' }}
-            </button>
-          </div>
         </section>
 
         <section class="admin-panel">
@@ -446,27 +429,42 @@ async function download(): Promise<void> {
 
         <section class="admin-panel">
           <h2 class="panel-title">
-            Reports
+            Tools
           </h2>
           <h3 class="block-title">
             Download a Monthly Report
           </h3>
-          <div class="picker-heading">
-            Appliance
-          </div>
-          <div class="inline-row">
-            <select
-              v-model="selectedApplianceId"
-              class="item-select appliance-select"
-            >
-              <option
-                v-for="appliance in appliances"
-                :key="appliance.id"
-                :value="appliance.id"
+          <div class="tool-row">
+            <label class="tool-field appliance-field">
+              <span class="picker-heading">Appliance</span>
+              <select
+                v-model="selectedApplianceId"
+                class="item-select appliance-select"
               >
-                {{ appliance.callsign }}{{ appliance.active ? '' : ' (inactive)' }}
-              </option>
-            </select>
+                <option
+                  v-for="appliance in appliances"
+                  :key="appliance.id"
+                  :value="appliance.id"
+                >
+                  {{ appliance.callsign }}{{ appliance.active ? '' : ' (inactive)' }}
+                </option>
+              </select>
+            </label>
+            <label class="tool-field">
+              <span class="picker-heading">Month</span>
+              <select
+                v-model="selectedMonth"
+                class="item-select month-select"
+              >
+                <option
+                  v-for="month in months"
+                  :key="month"
+                  :value="month"
+                >
+                  {{ month }}
+                </option>
+              </select>
+            </label>
             <button
               class="small-btn fit-btn positive download-btn"
               :disabled="!canDownload"
@@ -475,29 +473,30 @@ async function download(): Promise<void> {
               {{ downloading ? 'Preparing…' : 'Download' }}
             </button>
           </div>
-
-          <div class="picker-heading">
-            Month
-          </div>
-          <select
-            v-model="selectedMonth"
-            class="item-select month-select"
-          >
-            <option
-              v-for="month in months"
-              :key="month"
-              :value="month"
-            >
-              {{ month }}
-            </option>
-          </select>
-
           <p
             v-if="noCheckSheet"
             class="error-msg no-check-sheet"
           >
             No Check Sheet yet.
           </p>
+
+          <div class="qr-block">
+            <div class="qr-text">
+              <h3 class="block-title">
+                QR code
+              </h3>
+              <p class="block-note">
+                Print this and put it up where Checks start, e.g. the engine bay.
+              </p>
+            </div>
+            <button
+              class="small-btn fit-btn positive download-qr"
+              :disabled="preparingQr || !brigadeSummary"
+              @click="downloadQr"
+            >
+              {{ preparingQr ? 'Preparing…' : 'Download' }}
+            </button>
+          </div>
         </section>
       </div>
     </main>
