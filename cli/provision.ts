@@ -49,6 +49,8 @@ const SERVICES = [
   'recaptchaenterprise.googleapis.com',
   'identitytoolkit.googleapis.com',
   'cloudresourcemanager.googleapis.com',
+  // Billing checks run before the kill switch step, and use the project as their quota project.
+  'cloudbilling.googleapis.com',
 ]
 const FUNCTIONS_SERVICES = [
   'cloudfunctions.googleapis.com',
